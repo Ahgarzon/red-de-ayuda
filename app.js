@@ -40,6 +40,8 @@ const isAdmin = ()=> !!cache('ay_admin');
 /* ¿Este reporte lo puedo tocar? Sí si es mío, si soy operador, o si es un registro
    viejo que aún no tiene dueño (para no congelar lo creado antes de esta versión). */
 function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
+/* registros visibles = los NO archivados (nada se borra de la base; solo se oculta) */
+function vivos(table){ return (state[table]||[]).filter(r=>!r.archivado); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'),2600); }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -54,7 +56,15 @@ async function api(action, table, extra={}){
 
 async function pull(table){
   const rows = await api('list', table);
-  if(Array.isArray(rows)){ state[table]=rows; cache(LS[table], rows); }
+  if(Array.isArray(rows)){
+    // NO perder lo que aún no llegó al servidor: conservamos los registros locales
+    // pendientes (creados/editados sin señal) que el servidor todavía no tiene.
+    const prev = state[table]||[];
+    const srvIds = new Set(rows.map(r=>String(r.id)));
+    const pendientes = prev.filter(r => r && (r._pending || String(r.id).startsWith('tmp_')) && !srvIds.has(String(r.id)));
+    state[table] = pendientes.concat(rows);
+    cache(LS[table], state[table]);
+  }
   return state[table];
 }
 
@@ -83,7 +93,7 @@ async function save(table, data){
     throw new Error('sin respuesta');
   } catch(e){
     state[table].unshift(rec); cache(LS[table], state[table]);
-    enqueue({op:'insert', table, data});
+    enqueue({op:'insert', table, data, __id:rec.id});
     renderAll(); toast('Guardado sin señal · se enviará solo');
     return true;
   }
@@ -105,13 +115,18 @@ async function update(table, id, data){
   }
 }
 
+/* "Borrar" NO destruye nada: archiva el registro (queda SIEMPRE en la base de datos,
+   recuperable por el operador) y solo lo oculta de las listas y el mapa. Así ningún
+   punto se pierde jamás, aunque alguien toque el botón de borrar. */
 async function del(table, id){
   const i = state[table].findIndex(x=>x.id===id);
-  if(i>=0){ state[table].splice(i,1); cache(LS[table], state[table]); renderAll(); }
-  if(String(id).startsWith('tmp_')){ // aún no estaba en el servidor: quítalo de la cola
-    state.queue = state.queue.filter(j=>!(j.data&&j.data.__local===id)); cache(LS.queue,state.queue); return; }
-  try{ await api('delete', table, {id}); }
-  catch(e){ enqueue({op:'delete', table, id}); toast('Se borrará al recuperar señal'); }
+  if(i>=0){ state[table][i]=Object.assign({}, state[table][i], {archivado:true}); cache(LS[table], state[table]); renderAll(); }
+  if(String(id).startsWith('tmp_')){
+    // aún no llegó al servidor: marca su inserción pendiente como archivada
+    state.queue.forEach(j=>{ if(j.op==='insert'&&j.table===table&&j.__id===id&&j.data){ j.data.archivado=true; } });
+    cache(LS.queue,state.queue); return;
+  }
+  update(table, id, {archivado:true});   // persiste el archivado (offline-safe, se reintenta)
 }
 
 function enqueue(job){ state.queue.push(job); cache(LS.queue, state.queue); updatePending(); }
@@ -186,12 +201,13 @@ function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuent
 let filtroDepto='__all';
 function renderPuntos(){
   const cont=$('#lista-puntos');
-  const deptos=[...new Set(state.puntos.map(p=>p.departamento).filter(Boolean))].sort();
+  const puntos=vivos('puntos');
+  const deptos=[...new Set(puntos.map(p=>p.departamento).filter(Boolean))].sort();
   const fc=$('#filtros-depto');
   fc.innerHTML = ['__all',...deptos].map(d=>`<button class="chip ${filtroDepto===d?'active':''}" data-depto="${esc(d)}">${d==='__all'?'Todos':esc(d)}</button>`).join('');
   fc.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{filtroDepto=b.dataset.depto;renderPuntos();});
 
-  let list = state.puntos.slice();
+  let list = puntos.slice();
   if(filtroDepto!=='__all') list=list.filter(p=>p.departamento===filtroDepto);
 
   const r=list.filter(p=>color(p)==='rojo'||color(p)==='rescate').length;
@@ -230,14 +246,15 @@ function renderPuntos(){
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
   cont.querySelectorAll('[data-editp]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.editp);if(p)openForm('punto',p,p.id);});
-  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar este lugar?','Se quita de la lista y del mapa.',()=>del('puntos',b.dataset.del)));
+  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Ocultar este lugar?','Se quita de la lista y del mapa, pero queda guardado (no se pierde). Se puede recuperar.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
 }
 
 function renderEntregas(){
   const cont=$('#lista-entregas');
-  if(!state.entregas.length){ cont.innerHTML='<div class="empty">Todavía no hay entregas anotadas.<br>Toca el botón verde “＋ Anotar una entrega”.</div>'; return; }
-  cont.innerHTML = state.entregas.map(e=>`
+  const entregas=vivos('entregas');
+  if(!entregas.length){ cont.innerHTML='<div class="empty">Todavía no hay entregas anotadas.<br>Toca el botón verde “＋ Anotar una entrega”.</div>'; return; }
+  cont.innerHTML = entregas.map(e=>`
     <div class="card ${e.recibido?'verde':'ambar'}">
       <span class="badge ${e.recibido?'verde':'rojo'}">${e.recibido?'Recibido':'En camino'}</span>
       <h3>${esc(e.lugar||'Entrega')}${e._pending?' ⏳':''}</h3>
@@ -263,9 +280,10 @@ function renderEntregas(){
 let segDonar='fuentes';
 function renderFuentes(){
   const cont=$('#lista-fuentes');
-  if(!state.fuentes.length){ cont.innerHTML='<div class="empty">Todavía no hay cuentas ni puntos.<br>Toca “＋ Agregar una cuenta” para empezar.</div>'; return; }
-  cont.innerHTML = state.fuentes.map(f=>{
-    const aportes=state.aportes.filter(a=>a.fuente_id===f.id);
+  const fuentes=vivos('fuentes');
+  if(!fuentes.length){ cont.innerHTML='<div class="empty">Todavía no hay cuentas ni puntos.<br>Toca “＋ Agregar una cuenta” para empezar.</div>'; return; }
+  cont.innerHTML = fuentes.map(f=>{
+    const aportes=vivos('aportes').filter(a=>a.fuente_id===f.id);
     const conf=aportes.filter(a=>a.estado==='confirmado').length;
     return `<div class="card ${f.verificada?'verde':''}">
       <span class="badge ${f.verificada?'verde':'rojo'}">${f.verificada?'Verificada':'Sin verificar'}</span>
@@ -290,8 +308,9 @@ function renderFuentes(){
 
 function renderAportes(){
   const cont=$('#lista-aportes');
-  if(!state.aportes.length){ cont.innerHTML='<div class="empty">Todavía no hay donaciones anotadas.</div>'; return; }
-  cont.innerHTML = state.aportes.map(a=>{
+  const aportes=vivos('aportes');
+  if(!aportes.length){ cont.innerHTML='<div class="empty">Todavía no hay donaciones anotadas.</div>'; return; }
+  cont.innerHTML = aportes.map(a=>{
     const f=state.fuentes.find(x=>x.id===a.fuente_id);
     return `<div class="card ${a.estado==='confirmado'?'verde':'ambar'}">
       <span class="badge ${a.estado==='confirmado'?'verde':'rojo'}">${a.estado==='confirmado'?'Confirmado ✓':'Reportado'}</span>
@@ -356,8 +375,8 @@ function locateMe(center){
 function fitToPoints(){
   if(!state.map) return;
   const pts=[];
-  state.puntos.forEach(p=>{ if(p.lat!=null&&p.lng!=null) pts.push([p.lat,p.lng]); });
-  state.entregas.forEach(e=>{ if(e.lat!=null&&e.lng!=null) pts.push([e.lat,e.lng]); });
+  vivos('puntos').forEach(p=>{ if(p.lat!=null&&p.lng!=null) pts.push([p.lat,p.lng]); });
+  vivos('entregas').forEach(e=>{ if(e.lat!=null&&e.lng!=null) pts.push([e.lat,e.lng]); });
   if(!pts.length) return;
   if(pts.length===1){ state.map.setView(pts[0],13); }
   else state.map.fitBounds(pts,{padding:[40,40],maxZoom:14});
@@ -367,7 +386,7 @@ function renderMap(){
   if(!state.markers) return;
   state.markers.clearLayers();
   const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
-  state.puntos.forEach(p=>{
+  vivos('puntos').forEach(p=>{
     if(p.lat==null||p.lng==null) return;
     const c=color(p);
     const m=L.circleMarker([p.lat,p.lng],{radius:12,color:'#fff',weight:2,fillColor:cols[c],fillOpacity:.95});
@@ -375,7 +394,7 @@ function renderMap(){
     m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}`);
     state.markers.addLayer(m);
   });
-  state.entregas.forEach(e=>{
+  vivos('entregas').forEach(e=>{
     if(e.lat==null||e.lng==null) return;
     const m=L.marker([e.lat,e.lng]);
     m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}`);
