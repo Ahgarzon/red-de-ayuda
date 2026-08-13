@@ -78,6 +78,15 @@ async function update(table, id, data){
   }
 }
 
+async function del(table, id){
+  const i = state[table].findIndex(x=>x.id===id);
+  if(i>=0){ state[table].splice(i,1); cache(LS[table], state[table]); renderAll(); }
+  if(String(id).startsWith('tmp_')){ // aún no estaba en el servidor: quítalo de la cola
+    state.queue = state.queue.filter(j=>!(j.data&&j.data.__local===id)); cache(LS.queue,state.queue); return; }
+  try{ await api('delete', table, {id}); }
+  catch(e){ enqueue({op:'delete', table, id}); toast('Se borrará al recuperar señal'); }
+}
+
 function enqueue(job){ state.queue.push(job); cache(LS.queue, state.queue); updatePending(); }
 
 async function flush(){
@@ -88,6 +97,7 @@ async function flush(){
     try{
       if(job.op==='insert') await api('insert', job.table, {data:job.data});
       else if(job.op==='update') await api('update', job.table, {id:job.id, data:job.data});
+      else if(job.op==='delete') await api('delete', job.table, {id:job.id});
     }catch(e){ rest.push(job); }
   }
   state.queue=rest; cache(LS.queue, state.queue); updatePending();
@@ -159,11 +169,13 @@ function renderPuntos(){
       <div class="card-actions">
         <button class="btn-mini acc" data-vermapa="${p.id}">Ver en mapa</button>
         ${p.estado!=='cubierto'?`<button class="btn-mini ok" data-cubierto="${p.id}">Marcar cubierto</button>`:`<button class="btn-mini" data-reabrir="${p.id}">Reabrir</button>`}
+        <button class="btn-mini" data-del="${p.id}">🗑</button>
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
+  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar este punto?')) del('puntos',b.dataset.del); });
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat){go('mapa');setTimeout(()=>{state.map.setView([p.lat,p.lng],14);},250);}else toast('Ese punto no tiene ubicación');});
 }
 
@@ -180,12 +192,14 @@ function renderEntregas(){
       ${e.recibido&&e.recibido_por?`<div class="meta" style="margin-top:8px">Recibido por: ${esc(e.recibido_por)}</div>`:''}
       <div class="card-actions">
         ${!e.recibido?`<button class="btn-mini ok" data-recibido="${e.id}">Marcar recibido</button>`:''}
+        <button class="btn-mini" data-dele="${e.id}">🗑</button>
       </div>
     </div>`).join('');
   cont.querySelectorAll('[data-recibido]').forEach(b=>b.onclick=()=>{
     const quien=prompt('¿Quién recibió la ayuda? (nombre o lugar)'); if(quien===null)return;
     update('entregas',b.dataset.recibido,{recibido:true, recibido_por:quien||'confirmado'});
   });
+  cont.querySelectorAll('[data-dele]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar esta entrega?')) del('entregas',b.dataset.dele); });
 }
 
 let segDonar='fuentes';
@@ -206,12 +220,14 @@ function renderFuentes(){
       <div class="card-actions">
         <button class="btn-mini acc" data-aportar="${f.id}">Registrar aporte</button>
         ${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar verificada</button>`:''}
+        <button class="btn-mini" data-delf="${f.id}">🗑</button>
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy);toast('Número copiado');});
   cont.querySelectorAll('[data-aportar]').forEach(b=>b.onclick=()=>openForm('aporte',{fuente_id:b.dataset.aportar}));
   cont.querySelectorAll('[data-verificar]').forEach(b=>b.onclick=()=>update('fuentes',b.dataset.verificar,{verificada:true}));
+  cont.querySelectorAll('[data-delf]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar esta cuenta/punto?')) del('fuentes',b.dataset.delf); });
 }
 
 function renderAportes(){
@@ -416,6 +432,8 @@ function boot(){
   window.addEventListener('online', ()=>{ setNet(true); flush(); });
   window.addEventListener('offline', ()=>setNet(false));
 
+  initMap();          // el mapa es la pantalla inicial
+  setTimeout(()=>state.map&&state.map.invalidateSize(),300);
   pullAll();          // trae datos del servidor
   flush();            // envía lo pendiente
   setInterval(()=>{ if(navigator.onLine){ flush(); pullAll(); } }, 45000); // refresco periódico
