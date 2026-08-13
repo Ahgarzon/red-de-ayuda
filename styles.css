@@ -140,15 +140,23 @@ body{
 
 /* TABBAR */
 .tabbar{
-  display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none;
-  padding-bottom:var(--safe-bot)
+  display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none
 }
 .tab{
-  flex:1;background:none;border:none;padding:9px 2px 9px;color:var(--text-soft);
+  flex:1;background:none;border:none;padding:9px 2px 8px;color:var(--text-soft);
   font-size:12.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px
 }
 .tab span{font-size:24px;line-height:1}
 .tab.active{color:var(--accent)}
+.tab.active span{transform:scale(1.06)}
+
+/* MARCA DE AGUA — llena la franja inferior (área del gesto) y da la firma */
+.madeby{
+  flex:none;text-align:center;background:var(--surface);
+  color:var(--text-soft);font-size:11px;font-weight:600;letter-spacing:.02em;
+  padding:5px 0 calc(5px + var(--safe-bot))
+}
+.madeby span{color:var(--accent);font-weight:800;letter-spacing:.06em}
 
 /* MODAL */
 .modal{position:fixed;inset:0;z-index:1000;background:rgba(10,20,26,.5);display:flex;align-items:flex-end;justify-content:center}

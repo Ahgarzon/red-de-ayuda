@@ -1,7 +1,7 @@
-const APP='ayuda-v5';
+const APP='ayuda-v6';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
-  './','./index.html','./styles.css?v=5','./app.js?v=5','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=6','./app.js?v=6','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
