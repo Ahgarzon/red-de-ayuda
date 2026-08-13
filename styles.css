@@ -171,6 +171,9 @@ textarea{min-height:70px;resize:vertical}
 .multi{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .opt{padding:9px 13px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;color:var(--text-soft)}
 .opt.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.addother{display:flex;gap:8px;margin-top:8px}
+.addother-inp{flex:1;font-size:15px;padding:10px 12px}
+.addother-btn{flex:0 0 auto;white-space:nowrap;background:var(--accent-soft);color:var(--accent);border:none;border-radius:12px;padding:0 14px;font-weight:700;font-size:14px}
 
 .toast{position:fixed;left:50%;bottom:calc(80px + var(--safe-bot));transform:translateX(-50%);background:#0f1a20;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:2000;box-shadow:var(--shadow);max-width:88%}
 .leaflet-container{background:#dfe6ef}

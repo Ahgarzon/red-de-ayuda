@@ -239,7 +239,6 @@ function renderAportes(){
       <span class="badge ${a.estado==='confirmado'?'verde':'rojo'}">${a.estado==='confirmado'?'Confirmado ✓':'Reportado'}</span>
       <h3>$ ${esc(a.monto||'—')}${a._pending?' ⏳':''}</h3>
       <div class="meta">${esc(a.quien||'Anónimo')}${f?' → '+esc(f.nombre):''} · ${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
-      ${a.referencia?`<div class="meta">Ref: ${esc(a.referencia)}</div>`:''}
       ${a.comprobante?`<img class="card-photo" src="${a.comprobante}" alt="">`:''}
       <div class="card-actions">
         ${a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">Confirmar llegada</button>`:''}
@@ -361,7 +360,8 @@ let currentPhoto=null, gps={lat:null,lng:null};
 function openForm(kind, prefill={}){
   currentPhoto=null; gps={lat:null,lng:null}; destroyPick();
   const f=$('#modal-form'); const title=$('#modal-title');
-  const multi=(name,arr)=>`<div class="multi" data-multi="${name}">${ITEMS.map(i=>`<span class="opt" data-val="${i}">${i}</span>`).join('')}</div>`;
+  const multi=(name,arr)=>`<div class="multi" data-multi="${name}">${ITEMS.map(i=>`<span class="opt" data-val="${i}">${i}</span>`).join('')}</div>
+    <div class="addother"><input class="addother-inp" data-for="${name}" placeholder="Otro… escríbelo (ej: herramientas, agua potable)" maxlength="40"><button type="button" class="addother-btn" data-for="${name}">+ Añadir</button></div>`;
   if(kind==='punto'){
     title.textContent='Reportar punto de necesidad';
     f.innerHTML=`
@@ -409,7 +409,6 @@ function openForm(kind, prefill={}){
       <input type="hidden" name="fuente_id" value="${esc(prefill.fuente_id||'')}">
       <label>¿Quién aporta?</label><input name="quien" placeholder="Tu nombre (o anónimo)">
       <label>Monto</label><input name="monto" inputmode="decimal" placeholder="Ej: 50000">
-      <label>Referencia / N° de transacción</label><input name="referencia" placeholder="Del comprobante">
       <label>Foto del comprobante</label>
       <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
       <div class="help">Queda como prueba. Se marca “confirmado” cuando se verifica que llegó.</div>
@@ -417,6 +416,23 @@ function openForm(kind, prefill={}){
   }
   // multi toggles
   f.querySelectorAll('.multi .opt').forEach(o=>o.onclick=()=>o.classList.toggle('on'));
+  // añadir opción personalizada (por si no está en la lista)
+  const addCustom=(name)=>{
+    const inp=f.querySelector(`.addother-inp[data-for="${name}"]`); if(!inp) return;
+    const val=(inp.value||'').trim(); if(!val) return;
+    const multi=f.querySelector(`[data-multi="${name}"]`); if(!multi) return;
+    const exists=[...multi.querySelectorAll('.opt')].find(o=>(o.dataset.val||'').toLowerCase()===val.toLowerCase());
+    if(exists){ exists.classList.add('on'); }
+    else{
+      const chip=document.createElement('span');
+      chip.className='opt on'; chip.dataset.val=val; chip.textContent=val;
+      chip.onclick=()=>chip.classList.toggle('on');
+      multi.appendChild(chip);
+    }
+    inp.value='';
+  };
+  f.querySelectorAll('.addother-btn').forEach(b=>b.onclick=()=>addCustom(b.dataset.for));
+  f.querySelectorAll('.addother-inp').forEach(i=>i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addCustom(i.dataset.for); } }));
   // mini-mapa selector (solo en punto y entrega)
   if(kind==='punto'||kind==='entrega') initPickMap();
   // gps
@@ -460,7 +476,7 @@ function submitForm(kind){
       titular:g('titular'), destino:g('destino'), contacto:g('contacto'), nota:g('nota'), verificada:false };
   } else if(kind==='aporte'){
     table='aportes';
-    data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), referencia:g('referencia'), comprobante:currentPhoto||null, estado:'reportado' };
+    data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, estado:'reportado' };
   }
   closeModal();
   save(table, data).then(()=>{ if(table==='fuentes'||table==='aportes'){ segDonar= table==='aportes'?'aportes':'fuentes'; syncSeg(); } });
