@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -31,6 +31,10 @@
     <!-- MAPA -->
     <section class="screen active" id="screen-mapa">
       <div id="map"></div>
+      <div class="map-ctrls">
+        <button id="btn-locate" title="Mi ubicación">📍</button>
+        <button id="btn-fitall" title="Ver todos los puntos">🗺️</button>
+      </div>
       <div class="map-legend">
         <span><i class="sw rojo"></i>Necesita</span>
         <span><i class="sw ambar"></i>Parcial</span>
@@ -127,7 +131,7 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

@@ -176,7 +176,7 @@ function renderPuntos(){
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
   cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar este punto?')) del('puntos',b.dataset.del); });
-  cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat){go('mapa');setTimeout(()=>{state.map.setView([p.lat,p.lng],14);},250);}else toast('Ese punto no tiene ubicación');});
+  cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
 }
 
 function renderEntregas(){
@@ -253,15 +253,52 @@ function renderAportes(){
 }
 
 /* ================= MAPA ================= */
+// Iconos de Leaflet auto-alojados (mismo origen → funcionan offline, sin CDN)
+if(window.L){
+  L.Icon.Default.mergeOptions({
+    iconUrl:'vendor/leaflet/images/marker-icon.png',
+    iconRetinaUrl:'vendor/leaflet/images/marker-icon-2x.png',
+    shadowUrl:'vendor/leaflet/images/marker-shadow.png'
+  });
+}
+let mapFitDone=false, userMoved=false, meMarker=null;
 function initMap(){
   if(state.map) return;
-  state.map = L.map('map',{zoomControl:true}).setView([4.1,-74.5], 6); // Colombia
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18, attribution:'© OpenStreetMap'}).addTo(state.map);
+  state.map = L.map('map',{zoomControl:true, tap:true}).setView([4.6,-74.1], 6); // Colombia
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, detectRetina:true,
+    attribution:'© OpenStreetMap'
+  }).addTo(state.map);
   state.markers = L.layerGroup().addTo(state.map);
-  // ubicar al usuario
-  navigator.geolocation && navigator.geolocation.getCurrentPosition(
-    p=>{ if(state.map) state.map.setView([p.coords.latitude,p.coords.longitude],11); }, ()=>{}, {timeout:6000});
+  state.map.on('dragstart zoomstart', ()=>{ userMoved=true; });
+  // Botones propios (ubicación / ver todos)
+  const bl=$('#btn-locate'), bf=$('#btn-fitall');
+  if(bl) bl.onclick=()=>locateMe(true);
+  if(bf) bf.onclick=()=>{ userMoved=false; mapFitDone=false; fitToPoints(); };
+  // ubicar al usuario suave al abrir (sin forzar si ya movió)
+  locateMe(false);
   renderMap();
+}
+function locateMe(center){
+  if(!navigator.geolocation || !state.map) return;
+  navigator.geolocation.getCurrentPosition(p=>{
+    if(!state.map) return;
+    const ll=[p.coords.latitude,p.coords.longitude];
+    if(meMarker) state.map.removeLayer(meMarker);
+    meMarker=L.circleMarker(ll,{radius:8,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(state.map);
+    meMarker.bindPopup('Estás aquí');
+    if(center){ userMoved=true; state.map.setView(ll,14); }
+  }, ()=>{ if(center) toast('No se pudo obtener tu ubicación (permite el GPS)'); }, {enableHighAccuracy:true,timeout:8000});
+}
+function fitToPoints(){
+  if(!state.map) return;
+  const pts=[];
+  state.puntos.forEach(p=>{ if(p.lat!=null&&p.lng!=null) pts.push([p.lat,p.lng]); });
+  state.entregas.forEach(e=>{ if(e.lat!=null&&e.lng!=null) pts.push([e.lat,e.lng]); });
+  if(!pts.length) return;
+  if(pts.length===1){ state.map.setView(pts[0],13); }
+  else state.map.fitBounds(pts,{padding:[40,40],maxZoom:14});
+  mapFitDone=true;
 }
 function renderMap(){
   if(!state.markers) return;
@@ -270,7 +307,7 @@ function renderMap(){
   state.puntos.forEach(p=>{
     if(p.lat==null||p.lng==null) return;
     const c=color(p);
-    const m=L.circleMarker([p.lat,p.lng],{radius:11,color:'#fff',weight:2,fillColor:cols[c],fillOpacity:.95});
+    const m=L.circleMarker([p.lat,p.lng],{radius:12,color:'#fff',weight:2,fillColor:cols[c],fillOpacity:.95});
     const falta=(p.faltan||[]).join(', ');
     m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}`);
     state.markers.addLayer(m);
@@ -281,6 +318,8 @@ function renderMap(){
     m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}`);
     state.markers.addLayer(m);
   });
+  // La primera vez que llegan puntos, encuadra el mapa para que se VEAN (si el usuario no movió aún)
+  if(!mapFitDone && !userMoved) fitToPoints();
 }
 
 /* ================= FORMULARIOS ================= */

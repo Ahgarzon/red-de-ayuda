@@ -1,13 +1,16 @@
-const APP='ayuda-v1';
-const TILES='ayuda-tiles-v1';
+const APP='ayuda-v2';
+const TILES='ayuda-tiles-v2';
 const SHELL=[
-  './','./index.html','./styles.css','./app.js','./manifest.webmanifest',
+  './','./index.html','./styles.css','./app.js?v=2','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
+  './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
+  './vendor/leaflet/images/marker-shadow.png','./vendor/leaflet/images/layers.png','./vendor/leaflet/images/layers-2x.png'
 ];
 self.addEventListener('install', e=>{
-  e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL.map(u=>new Request(u,{mode:'no-cors'})))).catch(()=>{}));
+  // Todo el shell es mismo-origen ahora: se cachea con CORS normal (NO opaco),
+  // así el navegador SÍ aplica el CSS de Leaflet y el mapa se ve bien offline.
+  e.waitUntil(caches.open(APP).then(c=>Promise.allSettled(SHELL.map(u=>c.add(u)))));
   self.skipWaiting();
 });
 self.addEventListener('activate', e=>{
@@ -19,16 +22,16 @@ self.addEventListener('fetch', e=>{
   if(req.method!=='GET') return;                       // el API (POST) nunca se cachea
   const url=new URL(req.url);
   // Tiles del mapa: cache-first (guarda la zona ya vista para verla sin señal)
-  if(/tile\.openstreetmap\.org/.test(url.hostname)){
+  if(/tile\.openstreetmap\.org|tile\.opentopomap\.org|basemaps\.cartocdn\.com/.test(url.hostname)){
     e.respondWith(caches.open(TILES).then(async c=>{
       const hit=await c.match(req); if(hit) return hit;
-      try{ const res=await fetch(req); c.put(req,res.clone()); return res; }catch(err){ return hit||Response.error(); }
+      try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }catch(err){ return hit||Response.error(); }
     }));
     return;
   }
-  // App shell + estáticos: cache-first con actualización en segundo plano
+  // App shell + estáticos (mismo-origen): cache-first con actualización en segundo plano
   e.respondWith(caches.match(req).then(hit=>{
-    const net=fetch(req).then(res=>{ if(res&&res.ok){ caches.open(APP).then(c=>c.put(req,res.clone())); } return res; }).catch(()=>hit);
+    const net=fetch(req).then(res=>{ if(res&&res.ok&&url.origin===location.origin){ caches.open(APP).then(c=>c.put(req,res.clone())); } return res; }).catch(()=>hit);
     return hit||net;
   }));
 });
