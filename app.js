@@ -262,13 +262,18 @@ if(window.L){
   });
 }
 let mapFitDone=false, userMoved=false, meMarker=null;
+// Capa base: CARTO Voyager — se ve limpia y consistente en TODO el país (ciudad y campo),
+// no como los tiles crudos de OSM que dejan las zonas rurales casi en blanco.
+function baseTiles(){
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    subdomains:'abcd', maxZoom:20, detectRetina:true, crossOrigin:true,
+    attribution:'© OpenStreetMap · © CARTO'
+  });
+}
 function initMap(){
   if(state.map) return;
   state.map = L.map('map',{zoomControl:true, tap:true}).setView([4.6,-74.1], 6); // Colombia
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:19, detectRetina:true,
-    attribution:'© OpenStreetMap'
-  }).addTo(state.map);
+  baseTiles().addTo(state.map);
   state.markers = L.layerGroup().addTo(state.map);
   state.map.on('dragstart zoomstart', ()=>{ userMoved=true; });
   // Botones propios (ubicación / ver todos)
@@ -303,7 +308,7 @@ function fitToPoints(){
 function renderMap(){
   if(!state.markers) return;
   state.markers.clearLayers();
-  const cols={rojo:'#dc2626',ambar:'#d97706',verde:'#16a34a',rescate:'#7c3aed'};
+  const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
   state.puntos.forEach(p=>{
     if(p.lat==null||p.lng==null) return;
     const c=color(p);
@@ -322,10 +327,39 @@ function renderMap(){
   if(!mapFitDone && !userMoved) fitToPoints();
 }
 
+/* ====== Mini-mapa para ELEGIR ubicación (toca o arrastra el pin) ====== */
+let pickMap=null, pickMarker=null, lastLatLng=null;
+function destroyPick(){ if(pickMap){ try{pickMap.remove();}catch(e){} } pickMap=null; pickMarker=null; }
+function setPick(lat,lng,zoom){
+  gps.lat=+(+lat).toFixed(6); gps.lng=+(+lng).toFixed(6); lastLatLng=[gps.lat,gps.lng];
+  const info=document.querySelector('#gps-info');
+  if(info) info.innerHTML='📍 Ubicación fijada ('+gps.lat+', '+gps.lng+') · <b>arrastra el pin para ajustar</b>';
+  if(pickMap){
+    if(!pickMarker){ pickMarker=L.marker([gps.lat,gps.lng],{draggable:true,autoPan:true}).addTo(pickMap);
+      pickMarker.on('dragend',()=>{const ll=pickMarker.getLatLng();setPick(ll.lat,ll.lng);}); }
+    else pickMarker.setLatLng([gps.lat,gps.lng]);
+    if(zoom) pickMap.setView([gps.lat,gps.lng],zoom);
+  }
+}
+function initPickMap(){
+  const el=document.getElementById('pickmap'); if(!el||!window.L) return;
+  destroyPick();
+  const has=gps.lat!=null;
+  const start = has?[gps.lat,gps.lng] : (lastLatLng||[4.6,-74.1]);
+  pickMap=L.map(el,{zoomControl:true,attributionControl:false});
+  pickMap.setView(start, has?15:(lastLatLng?13:6));
+  baseTiles().addTo(pickMap);
+  pickMarker=L.marker(start,{draggable:true,autoPan:true}).addTo(pickMap);
+  pickMarker.on('dragend',()=>{const ll=pickMarker.getLatLng();setPick(ll.lat,ll.lng);});
+  if(has) setPick(start[0],start[1]);            // conserva lo elegido si ya había
+  pickMap.on('click',e=>setPick(e.latlng.lat,e.latlng.lng));  // tocar el mapa fija el punto
+  setTimeout(()=>{ pickMap&&pickMap.invalidateSize(); },200);
+}
+
 /* ================= FORMULARIOS ================= */
 let currentPhoto=null, gps={lat:null,lng:null};
 function openForm(kind, prefill={}){
-  currentPhoto=null; gps={lat:null,lng:null};
+  currentPhoto=null; gps={lat:null,lng:null}; destroyPick();
   const f=$('#modal-form'); const title=$('#modal-title');
   const multi=(name,arr)=>`<div class="multi" data-multi="${name}">${ITEMS.map(i=>`<span class="opt" data-val="${i}">${i}</span>`).join('')}</div>`;
   if(kind==='punto'){
@@ -339,8 +373,10 @@ function openForm(kind, prefill={}){
       <label>¿Qué SOBRA / ya llegó?</label>${multi('sobran')}
       <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px">🚨 Faltan rescatistas / gente atrapada</label>
       <label>Nota (opcional)</label><textarea name="nota" placeholder="Detalles: qué se necesita con urgencia, cómo llegar…"></textarea>
+      <label>¿Dónde queda? Ubícalo en el mapa</label>
+      <div id="pickmap"></div>
+      <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el punto en cualquier lugar. O usa tu GPS.</div>
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
-      <div class="help" id="gps-info">Sirve sin datos: el GPS funciona sin señal.</div>
       <button class="btn-primary" type="submit">Guardar punto</button>`;
   } else if(kind==='entrega'){
     title.textContent='Registrar entrega';
@@ -350,8 +386,10 @@ function openForm(kind, prefill={}){
       <label>¿Qué se entregó?</label><input name="items" placeholder="Ej: 20 colchones, agua, mercados">
       <label>Foto de la entrega (prueba)</label>
       <input type="file" accept="image/*" capture="environment" id="foto"><img class="photo-prev" id="prev">
-      <button type="button" class="gps-btn" id="gps">📍 Marcar ubicación</button>
-      <div class="help" id="gps-info"></div>
+      <label>¿Dónde se entregó? Ubícalo en el mapa</label>
+      <div id="pickmap"></div>
+      <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el lugar. O usa tu GPS.</div>
+      <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
       <button class="btn-primary" type="submit">Guardar entrega</button>`;
   } else if(kind==='fuente'){
     title.textContent='Agregar cuenta / punto de recolección';
@@ -379,14 +417,16 @@ function openForm(kind, prefill={}){
   }
   // multi toggles
   f.querySelectorAll('.multi .opt').forEach(o=>o.onclick=()=>o.classList.toggle('on'));
+  // mini-mapa selector (solo en punto y entrega)
+  if(kind==='punto'||kind==='entrega') initPickMap();
   // gps
   const gbtn=f.querySelector('#gps');
   if(gbtn) gbtn.onclick=()=>{
-    const info=f.querySelector('#gps-info'); info.textContent='Ubicando…';
+    const info=f.querySelector('#gps-info'); if(info) info.textContent='Ubicando…';
     navigator.geolocation.getCurrentPosition(p=>{
-      gps.lat=+p.coords.latitude.toFixed(6); gps.lng=+p.coords.longitude.toFixed(6);
-      info.textContent='📍 Ubicación lista ('+gps.lat+', '+gps.lng+')'; gbtn.style.background='#d5efec';
-    }, ()=>{ info.textContent='No se pudo obtener el GPS (permite la ubicación).'; }, {enableHighAccuracy:true,timeout:8000});
+      setPick(p.coords.latitude, p.coords.longitude, 16);
+      gbtn.style.background='var(--accent-soft)';
+    }, ()=>{ if(info) info.textContent='No se pudo obtener el GPS (permite la ubicación). Toca el mapa para marcar a mano.'; }, {enableHighAccuracy:true,timeout:8000});
   };
   // foto
   const fin=f.querySelector('#foto');
@@ -445,7 +485,7 @@ function go(screen){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.screen===screen));
   if(screen==='mapa'){ initMap(); setTimeout(()=>state.map&&state.map.invalidateSize(),120); }
 }
-function closeModal(){ $('#modal').classList.add('hidden'); }
+function closeModal(){ $('#modal').classList.add('hidden'); destroyPick(); }
 function syncSeg(){
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.seg===segDonar));
   $('#lista-fuentes').classList.toggle('hidden', segDonar!=='fuentes');
