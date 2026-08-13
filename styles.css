@@ -19,13 +19,15 @@
   --safe-bot:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow:hidden;position:fixed;width:100%;background:var(--surface)}
 body{
   font-family:-apple-system,'Segoe UI',Roboto,'Liberation Sans','DejaVu Sans',sans-serif;
-  background:var(--canvas);color:var(--text);
-  font-size:17.5px;line-height:1.45;overscroll-behavior-y:none;
+  color:var(--text);
+  font-size:17.5px;line-height:1.45;overscroll-behavior:none;
 }
-#app{display:flex;flex-direction:column;height:100dvh}
+/* La app llena SIEMPRE toda la pantalla (iPhone y Android), sin hueco blanco abajo.
+   position:fixed+inset:0 evita el bug de 100dvh que dejaba una franja vacía. */
+#app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--canvas)}
 
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
