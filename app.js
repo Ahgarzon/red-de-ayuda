@@ -556,7 +556,7 @@ function boot(){
   $('#modal-close').onclick=closeModal;
   $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
   $('#btn-sync').onclick=()=>{ toast('Sincronizando…'); flush().then(pullAll); };
-  $('#btn-share').onclick=()=>{ if(navigator.share) navigator.share({title:'Red de Ayuda', text:'App para coordinar ayudas del terremoto en Colombia', url:location.href}); else { navigator.clipboard&&navigator.clipboard.writeText(location.href); toast('Link copiado'); } };
+  $('#btn-share').onclick=()=>{ if(navigator.share) navigator.share({title:'Ayúdame Colombia', text:'App para coordinar ayudas del terremoto en Colombia', url:location.href}); else { navigator.clipboard&&navigator.clipboard.writeText(location.href); toast('Link copiado'); } };
 
   window.addEventListener('online', ()=>{ setNet(true); flush(); });
   window.addEventListener('offline', ()=>setNet(false));

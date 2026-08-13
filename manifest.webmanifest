@@ -1,6 +1,6 @@
 {
-  "name": "Red de Ayuda · Terremoto Colombia",
-  "short_name": "Red de Ayuda",
+  "name": "Ayúdame Colombia · Terremoto",
+  "short_name": "Ayúdame Colombia",
   "description": "Coordina ayudas del terremoto: mapa de necesidades, balance de lo que falta y sobra, entregas con foto y seguimiento del dinero. Funciona sin internet.",
   "start_url": ".",
   "scope": ".",
