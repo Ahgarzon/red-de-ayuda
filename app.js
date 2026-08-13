@@ -13,6 +13,33 @@ const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online
 const $ = s => document.querySelector(s);
 const cache = (k,v)=>{ if(v===undefined){ try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null} } localStorage.setItem(k,JSON.stringify(v)); };
 const uid = ()=> 'tmp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+
+/* ---------- identidad anónima del dispositivo (sin registro, sin barreras) ----------
+   La 1ª vez se crea un token secreto y queda guardado en el teléfono. Nadie más lo
+   conoce. Sirve para que SOLO quien avisó/creó un reporte pueda marcarlo, cambiarlo o
+   borrarlo. Un "gracioso" no ve esos botones en lo ajeno, así que no puede dañar nada. */
+function deviceId(){
+  let d = cache('ay_device');
+  if(!d){
+    d = (window.crypto&&crypto.randomUUID) ? crypto.randomUUID()
+        : 'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+    cache('ay_device', d);
+  }
+  return d;
+}
+const ME = deviceId();
+/* Modo operador (ZOSA): abrir la app con  #op-zosa2026  desbloquea moderar TODO
+   (marcar/cambiar/borrar cualquier reporte). Con  #op-off  se sale de ese modo. */
+const OP_KEY = 'zosa2026';
+(function(){
+  const h = location.hash||'';
+  if(h==='#op-off'){ try{localStorage.removeItem('ay_admin');}catch(e){} history.replaceState(null,'',location.pathname); }
+  else if(h.indexOf('op-')>=0 && h.indexOf(OP_KEY)>=0){ cache('ay_admin', true); history.replaceState(null,'',location.pathname); }
+})();
+const isAdmin = ()=> !!cache('ay_admin');
+/* ¿Este reporte lo puedo tocar? Sí si es mío, si soy operador, o si es un registro
+   viejo que aún no tiene dueño (para no congelar lo creado antes de esta versión). */
+function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'),2600); }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -192,13 +219,17 @@ function renderPuntos(){
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
       <div class="card-actions">
         <button class="btn-mini acc" data-vermapa="${p.id}">📍 Ver en el mapa</button>
+        ${mine(p)?`
         ${p.estado!=='cubierto'?`<button class="btn-mini ok" data-cubierto="${p.id}">✔ Ya tiene ayuda</button>`:`<button class="btn-mini" data-reabrir="${p.id}">Todavía necesita</button>`}
-        <button class="btn-mini" data-del="${p.id}">🗑 Borrar</button>
+        <button class="btn-mini" data-editp="${p.id}">✏️ Cambiar qué necesita</button>
+        <button class="btn-mini" data-del="${p.id}">🗑 Borrar</button>`
+        :`<span class="only-owner">Solo quien avisó este lugar puede cambiarlo</span>`}
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
+  cont.querySelectorAll('[data-editp]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.editp);if(p)openForm('punto',p,p.id);});
   cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar este lugar?','Se quita de la lista y del mapa.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
 }
@@ -215,8 +246,10 @@ function renderEntregas(){
       <div class="tags"><span class="tag plain">${esc(e.items||'ayuda')}</span></div>
       ${e.recibido&&e.recibido_por?`<div class="meta" style="margin-top:8px">Recibido por: ${esc(e.recibido_por)}</div>`:''}
       <div class="card-actions">
+        ${mine(e)?`
         ${!e.recibido?`<button class="btn-mini ok" data-recibido="${e.id}">✔ Ya llegó</button>`:''}
-        <button class="btn-mini" data-dele="${e.id}">🗑 Borrar</button>
+        <button class="btn-mini" data-dele="${e.id}">🗑 Borrar</button>`
+        :`<span class="only-owner">Solo quien la anotó puede cambiarla</span>`}
       </div>
     </div>`).join('');
   cont.querySelectorAll('[data-recibido]').forEach(b=>b.onclick=()=>{
@@ -244,8 +277,8 @@ function renderFuentes(){
       <div class="meta" style="margin-top:6px">${aportes.length} aporte(s) · ${conf} confirmado(s)</div>
       <div class="card-actions">
         <button class="btn-mini acc" data-aportar="${f.id}">Anoté una donación</button>
-        ${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar de confianza</button>`:''}
-        <button class="btn-mini" data-delf="${f.id}">🗑 Borrar</button>
+        ${mine(f)?`${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar de confianza</button>`:''}
+        <button class="btn-mini" data-delf="${f.id}">🗑 Borrar</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -266,7 +299,7 @@ function renderAportes(){
       <div class="meta">${esc(a.quien||'Anónimo')}${f?' → '+esc(f.nombre):''} · ${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
       ${a.comprobante?`<img class="card-photo" src="${a.comprobante}" alt="">`:''}
       <div class="card-actions">
-        ${a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">✔ El dinero llegó</button>`:''}
+        ${mine(a)&&a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">✔ El dinero llegó</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -383,27 +416,38 @@ function initPickMap(){
 
 /* ================= FORMULARIOS ================= */
 let currentPhoto=null, gps={lat:null,lng:null};
-function openForm(kind, prefill={}){
-  currentPhoto=null; gps={lat:null,lng:null}; destroyPick();
+let editingId=null, editingKind=null;
+function openForm(kind, prefill={}, editId=null){
+  const P = prefill||{};
+  editingId = editId; editingKind = editId ? kind : null;
+  currentPhoto=null;
+  gps={lat:(P.lat!=null?P.lat:null), lng:(P.lng!=null?P.lng:null)};
+  destroyPick();
   const f=$('#modal-form'); const title=$('#modal-title');
-  const multi=(name,arr)=>`<div class="multi" data-multi="${name}">${ITEMS.map(i=>`<span class="opt" data-val="${i}">${i}</span>`).join('')}</div>
+  const multi=(name,sel)=>{
+    const s=(sel||[]).map(x=>String(x));
+    const base=[...ITEMS];
+    s.forEach(v=>{ if(!base.some(b=>b.toLowerCase()===v.toLowerCase())) base.push(v); });
+    const on=v=>s.some(x=>x.toLowerCase()===String(v).toLowerCase())?' on':'';
+    return `<div class="multi" data-multi="${name}">${base.map(i=>`<span class="opt${on(i)}" data-val="${esc(i)}">${esc(i)}</span>`).join('')}</div>
     <div class="addother"><input class="addother-inp" data-for="${name}" placeholder="Otro… escríbelo (ej: herramientas, agua potable)" maxlength="40"><button type="button" class="addother-btn" data-for="${name}">+ Añadir</button></div>`;
+  };
   if(kind==='punto'){
-    title.textContent='Avisar qué falta en un lugar';
+    title.textContent = editId ? 'Cambiar qué necesita este lugar' : 'Avisar qué falta en un lugar';
     f.innerHTML=`
-      <label>Nombre del lugar *</label><input name="nombre" placeholder="Vereda, barrio, corregimiento" required>
-      <div class="row2"><div><label>Municipio</label><input name="municipio" placeholder="Ej: Timbío"></div>
-      <div><label>Departamento</label><input name="departamento" placeholder="Ej: Cauca"></div></div>
-      <label>¿Cuántas personas?</label><input name="personas" type="number" inputmode="numeric" placeholder="Ej: 40">
-      <label>¿Qué FALTA aquí? (toca lo que aplique)</label>${multi('faltan')}
-      <label>¿Qué SOBRA / ya llegó?</label>${multi('sobran')}
-      <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px">🚨 Faltan rescatistas / gente atrapada</label>
-      <label>Nota (opcional)</label><textarea name="nota" placeholder="Detalles: qué se necesita con urgencia, cómo llegar…"></textarea>
+      <label>Nombre del lugar *</label><input name="nombre" placeholder="Vereda, barrio, corregimiento" value="${esc(P.nombre||'')}" required>
+      <div class="row2"><div><label>Municipio</label><input name="municipio" placeholder="Ej: Timbío" value="${esc(P.municipio||'')}"></div>
+      <div><label>Departamento</label><input name="departamento" placeholder="Ej: Cauca" value="${esc(P.departamento||'')}"></div></div>
+      <label>¿Cuántas personas?</label><input name="personas" type="number" inputmode="numeric" placeholder="Ej: 40" value="${P.personas?esc(P.personas):''}">
+      <label>¿Qué FALTA aquí? (toca lo que aplique)</label>${multi('faltan',P.faltan)}
+      <label>¿Qué SOBRA / ya llegó?</label>${multi('sobran',P.sobran)}
+      <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px" ${P.necesita_rescate?'checked':''}>🚨 Faltan rescatistas / gente atrapada</label>
+      <label>Nota (opcional)</label><textarea name="nota" placeholder="Detalles: qué se necesita con urgencia, cómo llegar…">${esc(P.nota||'')}</textarea>
       <label>¿Dónde queda? Ubícalo en el mapa</label>
       <div id="pickmap"></div>
       <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el punto en cualquier lugar. O usa tu GPS.</div>
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
-      <button class="btn-primary" type="submit">Guardar punto</button>`;
+      <button class="btn-primary" type="submit">${editId?'Guardar cambios':'Guardar punto'}</button>`;
   } else if(kind==='entrega'){
     title.textContent='Anotar una entrega';
     f.innerHTML=`
@@ -504,8 +548,17 @@ function submitForm(kind){
     table='aportes';
     data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, estado:'reportado' };
   }
+  const afterDonar=()=>{ if(table==='fuentes'||table==='aportes'){ segDonar= table==='aportes'?'aportes':'fuentes'; syncSeg(); } };
+  if(editingKind===kind && editingId){
+    const eid=editingId; editingId=null; editingKind=null;
+    delete data.creado_por; delete data.estado;   // no reescribir dueño/estado al editar
+    closeModal();
+    update(table, eid, data).then(()=>{ afterDonar(); toast('Cambios guardados'); });
+    return;
+  }
+  data.owner = ME;                                 // deja marcada la identidad de quien reporta
   closeModal();
-  save(table, data).then(()=>{ if(table==='fuentes'||table==='aportes'){ segDonar= table==='aportes'?'aportes':'fuentes'; syncSeg(); } });
+  save(table, data).then(afterDonar);
 }
 
 /* downscale foto a ~900px jpeg */
@@ -527,7 +580,7 @@ function go(screen){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.screen===screen));
   if(screen==='mapa'){ initMap(); setTimeout(()=>state.map&&state.map.invalidateSize(),120); }
 }
-function closeModal(){ $('#modal').classList.add('hidden'); destroyPick(); }
+function closeModal(){ $('#modal').classList.add('hidden'); destroyPick(); editingId=null; editingKind=null; }
 function syncSeg(){
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.seg===segDonar));
   $('#lista-fuentes').classList.toggle('hidden', segDonar!=='fuentes');

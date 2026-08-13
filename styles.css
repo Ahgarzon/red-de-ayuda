@@ -121,6 +121,8 @@ body{
 .btn-mini{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 15px;font-size:15px;font-weight:700;color:var(--text)}
 .btn-mini.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn-mini.ok{background:var(--verde);color:#fff;border-color:var(--verde)}
+.only-owner{font-size:13px;color:var(--text-soft);display:inline-flex;align-items:center;gap:6px;padding:6px 2px;font-weight:600}
+.only-owner::before{content:"🔒";font-size:13px}
 .acct{font-family:'Liberation Mono',ui-monospace,monospace;background:var(--surface-2);padding:11px 12px;border-radius:10px;font-size:16px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .empty{text-align:center;color:var(--text-soft);padding:44px 22px;font-size:16px;line-height:1.5}
 
