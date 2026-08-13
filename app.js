@@ -127,7 +127,31 @@ function color(p){
   if(sobran>0) return 'ambar';
   return 'rojo';
 }
-const LABELS={rojo:'Necesita',ambar:'Parcial',verde:'Cubierto',rescate:'Rescate'};
+const LABELS={rojo:'Necesita ayuda',ambar:'Ayuda a medias',verde:'Ya tiene ayuda',rescate:'Faltan rescatistas'};
+
+/* ---------- pregunta simple in-app (reemplaza prompt/confirm del navegador) ---------- */
+function askText(title, msg, placeholder, cb){
+  const m=$('#ask'), inp=$('#ask-input');
+  $('#ask-title').textContent=title;
+  $('#ask-msg').textContent=msg||''; $('#ask-msg').style.display=msg?'block':'none';
+  inp.style.display='block'; inp.value=''; inp.placeholder=placeholder||'';
+  $('#ask-ok').textContent='Aceptar';
+  m.classList.remove('hidden'); setTimeout(()=>inp.focus(),120);
+  $('#ask-ok').onclick=()=>{ m.classList.add('hidden'); cb(inp.value.trim()); };
+  $('#ask-cancel').onclick=()=>{ m.classList.add('hidden'); };
+  m.onclick=e=>{ if(e.target.id==='ask') m.classList.add('hidden'); };
+}
+function askConfirm(title, msg, cb){
+  const m=$('#ask'), inp=$('#ask-input');
+  $('#ask-title').textContent=title;
+  $('#ask-msg').textContent=msg||''; $('#ask-msg').style.display=msg?'block':'none';
+  inp.style.display='none';
+  $('#ask-ok').textContent='Sí, eliminar';
+  m.classList.remove('hidden');
+  $('#ask-ok').onclick=()=>{ m.classList.add('hidden'); cb(true); };
+  $('#ask-cancel').onclick=()=>{ m.classList.add('hidden'); };
+  m.onclick=e=>{ if(e.target.id==='ask') m.classList.add('hidden'); };
+}
 
 /* ================= RENDER ================= */
 function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); updatePending(); }
@@ -151,7 +175,7 @@ function renderPuntos(){
      <div class="stat a"><b>${a}</b><small>parciales</small></div>
      <div class="stat g"><b>${g}</b><small>cubiertos</small></div>`;
 
-  if(!list.length){ cont.innerHTML='<div class="empty">Aún no hay puntos reportados.<br>Toca “+ Reportar punto”.</div>'; return; }
+  if(!list.length){ cont.innerHTML='<div class="empty">Todavía no hay lugares anotados.<br>Toca el botón verde “＋ Avisar qué falta”.</div>'; return; }
   // rojos primero
   const ord={rescate:0,rojo:1,ambar:2,verde:3};
   list.sort((x,y)=>ord[color(x)]-ord[color(y)]);
@@ -167,21 +191,21 @@ function renderPuntos(){
       <div class="tags">${falta}${sobra||(!falta?'<span class="tag plain">sin detalle</span>':'')}</div>
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
       <div class="card-actions">
-        <button class="btn-mini acc" data-vermapa="${p.id}">Ver en mapa</button>
-        ${p.estado!=='cubierto'?`<button class="btn-mini ok" data-cubierto="${p.id}">Marcar cubierto</button>`:`<button class="btn-mini" data-reabrir="${p.id}">Reabrir</button>`}
-        <button class="btn-mini" data-del="${p.id}">🗑</button>
+        <button class="btn-mini acc" data-vermapa="${p.id}">📍 Ver en el mapa</button>
+        ${p.estado!=='cubierto'?`<button class="btn-mini ok" data-cubierto="${p.id}">✔ Ya tiene ayuda</button>`:`<button class="btn-mini" data-reabrir="${p.id}">Todavía necesita</button>`}
+        <button class="btn-mini" data-del="${p.id}">🗑 Borrar</button>
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
-  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar este punto?')) del('puntos',b.dataset.del); });
+  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar este lugar?','Se quita de la lista y del mapa.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
 }
 
 function renderEntregas(){
   const cont=$('#lista-entregas');
-  if(!state.entregas.length){ cont.innerHTML='<div class="empty">Sin entregas registradas.<br>Toca “+ Registrar entrega”.</div>'; return; }
+  if(!state.entregas.length){ cont.innerHTML='<div class="empty">Todavía no hay entregas anotadas.<br>Toca el botón verde “＋ Anotar una entrega”.</div>'; return; }
   cont.innerHTML = state.entregas.map(e=>`
     <div class="card ${e.recibido?'verde':'ambar'}">
       <span class="badge ${e.recibido?'verde':'rojo'}">${e.recibido?'Recibido':'En camino'}</span>
@@ -191,21 +215,22 @@ function renderEntregas(){
       <div class="tags"><span class="tag plain">${esc(e.items||'ayuda')}</span></div>
       ${e.recibido&&e.recibido_por?`<div class="meta" style="margin-top:8px">Recibido por: ${esc(e.recibido_por)}</div>`:''}
       <div class="card-actions">
-        ${!e.recibido?`<button class="btn-mini ok" data-recibido="${e.id}">Marcar recibido</button>`:''}
-        <button class="btn-mini" data-dele="${e.id}">🗑</button>
+        ${!e.recibido?`<button class="btn-mini ok" data-recibido="${e.id}">✔ Ya llegó</button>`:''}
+        <button class="btn-mini" data-dele="${e.id}">🗑 Borrar</button>
       </div>
     </div>`).join('');
   cont.querySelectorAll('[data-recibido]').forEach(b=>b.onclick=()=>{
-    const quien=prompt('¿Quién recibió la ayuda? (nombre o lugar)'); if(quien===null)return;
-    update('entregas',b.dataset.recibido,{recibido:true, recibido_por:quien||'confirmado'});
+    askText('¿Ya llegó la ayuda?','¿Quién la recibió? (nombre de la persona o el lugar)','Ej: Doña Marta / Escuela La Capilla',v=>{
+      update('entregas',b.dataset.recibido,{recibido:true, recibido_por:v||'confirmado'});
+    });
   });
-  cont.querySelectorAll('[data-dele]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar esta entrega?')) del('entregas',b.dataset.dele); });
+  cont.querySelectorAll('[data-dele]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar esta entrega?','',()=>del('entregas',b.dataset.dele)));
 }
 
 let segDonar='fuentes';
 function renderFuentes(){
   const cont=$('#lista-fuentes');
-  if(!state.fuentes.length){ cont.innerHTML='<div class="empty">Sin cuentas ni puntos de recolección.<br>Agrega una para empezar.</div>'; return; }
+  if(!state.fuentes.length){ cont.innerHTML='<div class="empty">Todavía no hay cuentas ni puntos.<br>Toca “＋ Agregar una cuenta” para empezar.</div>'; return; }
   cont.innerHTML = state.fuentes.map(f=>{
     const aportes=state.aportes.filter(a=>a.fuente_id===f.id);
     const conf=aportes.filter(a=>a.estado==='confirmado').length;
@@ -218,21 +243,21 @@ function renderFuentes(){
       ${f.contacto?`<div class="meta">Contacto: ${esc(f.contacto)}</div>`:''}
       <div class="meta" style="margin-top:6px">${aportes.length} aporte(s) · ${conf} confirmado(s)</div>
       <div class="card-actions">
-        <button class="btn-mini acc" data-aportar="${f.id}">Registrar aporte</button>
-        ${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar verificada</button>`:''}
-        <button class="btn-mini" data-delf="${f.id}">🗑</button>
+        <button class="btn-mini acc" data-aportar="${f.id}">Anoté una donación</button>
+        ${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar de confianza</button>`:''}
+        <button class="btn-mini" data-delf="${f.id}">🗑 Borrar</button>
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy);toast('Número copiado');});
   cont.querySelectorAll('[data-aportar]').forEach(b=>b.onclick=()=>openForm('aporte',{fuente_id:b.dataset.aportar}));
   cont.querySelectorAll('[data-verificar]').forEach(b=>b.onclick=()=>update('fuentes',b.dataset.verificar,{verificada:true}));
-  cont.querySelectorAll('[data-delf]').forEach(b=>b.onclick=()=>{ if(confirm('¿Eliminar esta cuenta/punto?')) del('fuentes',b.dataset.delf); });
+  cont.querySelectorAll('[data-delf]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar esta cuenta?','',()=>del('fuentes',b.dataset.delf)));
 }
 
 function renderAportes(){
   const cont=$('#lista-aportes');
-  if(!state.aportes.length){ cont.innerHTML='<div class="empty">Sin aportes registrados todavía.</div>'; return; }
+  if(!state.aportes.length){ cont.innerHTML='<div class="empty">Todavía no hay donaciones anotadas.</div>'; return; }
   cont.innerHTML = state.aportes.map(a=>{
     const f=state.fuentes.find(x=>x.id===a.fuente_id);
     return `<div class="card ${a.estado==='confirmado'?'verde':'ambar'}">
@@ -241,13 +266,14 @@ function renderAportes(){
       <div class="meta">${esc(a.quien||'Anónimo')}${f?' → '+esc(f.nombre):''} · ${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
       ${a.comprobante?`<img class="card-photo" src="${a.comprobante}" alt="">`:''}
       <div class="card-actions">
-        ${a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">Confirmar llegada</button>`:''}
+        ${a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">✔ El dinero llegó</button>`:''}
       </div>
     </div>`;
   }).join('');
   cont.querySelectorAll('[data-confirmar]').forEach(b=>b.onclick=()=>{
-    const por=prompt('¿Quién confirma que el dinero llegó?'); if(por===null)return;
-    update('aportes',b.dataset.confirmar,{estado:'confirmado', confirmado_por:por||'confirmado'});
+    askText('¿El dinero ya llegó?','¿Quién lo confirma? (nombre)','Ej: Tesorero de la colecta',v=>{
+      update('aportes',b.dataset.confirmar,{estado:'confirmado', confirmado_por:v||'confirmado'});
+    });
   });
 }
 
@@ -363,7 +389,7 @@ function openForm(kind, prefill={}){
   const multi=(name,arr)=>`<div class="multi" data-multi="${name}">${ITEMS.map(i=>`<span class="opt" data-val="${i}">${i}</span>`).join('')}</div>
     <div class="addother"><input class="addother-inp" data-for="${name}" placeholder="Otro… escríbelo (ej: herramientas, agua potable)" maxlength="40"><button type="button" class="addother-btn" data-for="${name}">+ Añadir</button></div>`;
   if(kind==='punto'){
-    title.textContent='Reportar punto de necesidad';
+    title.textContent='Avisar qué falta en un lugar';
     f.innerHTML=`
       <label>Nombre del lugar *</label><input name="nombre" placeholder="Vereda, barrio, corregimiento" required>
       <div class="row2"><div><label>Municipio</label><input name="municipio" placeholder="Ej: Timbío"></div>
@@ -379,7 +405,7 @@ function openForm(kind, prefill={}){
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
       <button class="btn-primary" type="submit">Guardar punto</button>`;
   } else if(kind==='entrega'){
-    title.textContent='Registrar entrega';
+    title.textContent='Anotar una entrega';
     f.innerHTML=`
       <label>¿A dónde se entregó? *</label><input name="lugar" placeholder="Lugar / vereda / punto" required>
       <label>¿Quién entrega?</label><input name="quien_entrego" placeholder="Tu nombre u organización">
@@ -392,7 +418,7 @@ function openForm(kind, prefill={}){
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
       <button class="btn-primary" type="submit">Guardar entrega</button>`;
   } else if(kind==='fuente'){
-    title.textContent='Agregar cuenta / punto de recolección';
+    title.textContent='Agregar una cuenta o punto';
     f.innerHTML=`
       <label>Nombre *</label><input name="nombre" placeholder="Ej: Cruz Roja Cauca / Colecta Popayán" required>
       <label>Tipo</label><select name="tipo"><option value="cuenta">Cuenta bancaria</option><option value="recoleccion">Punto de recolección físico</option></select>
@@ -404,7 +430,7 @@ function openForm(kind, prefill={}){
       <label>Nota</label><textarea name="nota" placeholder="Qué se recibe, horarios…"></textarea>
       <button class="btn-primary" type="submit">Guardar</button>`;
   } else if(kind==='aporte'){
-    title.textContent='Registrar aporte';
+    title.textContent='Anotar una donación';
     f.innerHTML=`
       <input type="hidden" name="fuente_id" value="${esc(prefill.fuente_id||'')}">
       <label>¿Quién aporta?</label><input name="quien" placeholder="Tu nombre (o anónimo)">
@@ -412,7 +438,7 @@ function openForm(kind, prefill={}){
       <label>Foto del comprobante</label>
       <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
       <div class="help">Queda como prueba. Se marca “confirmado” cuando se verifica que llegó.</div>
-      <button class="btn-primary" type="submit">Registrar aporte</button>`;
+      <button class="btn-primary" type="submit">Guardar donación</button>`;
   }
   // multi toggles
   f.querySelectorAll('.multi .opt').forEach(o=>o.onclick=()=>o.classList.toggle('on'));
@@ -519,6 +545,14 @@ function boot(){
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.screen));
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
   document.querySelectorAll('.seg-btn').forEach(b=>b.onclick=()=>{segDonar=b.dataset.seg;syncSeg();});
+  // Bienvenida / guía (primera vez, y siempre disponible con el botón "Ayuda")
+  const showWelcome=()=>$('#welcome').classList.remove('hidden');
+  const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };
+  $('#welcome-go').onclick=hideWelcome;
+  $('#btn-guia').onclick=showWelcome;
+  $('#btn-tour').onclick=showWelcome;
+  if(!cache('ay_seen')) showWelcome();
+
   $('#modal-close').onclick=closeModal;
   $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
   $('#btn-sync').onclick=()=>{ toast('Sincronizando…'); flush().then(pullAll); };

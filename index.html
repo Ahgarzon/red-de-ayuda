@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=4" />
+<link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
 <div id="app">
@@ -22,9 +22,7 @@
         <small>Terremoto · Colombia</small>
       </div>
     </div>
-    <div id="netstatus" class="net" title="Estado de conexión">
-      <span class="dot"></span><span id="netlabel">…</span>
-    </div>
+    <button id="btn-guia" class="help-btn" title="¿Cómo se usa?">❓ Ayuda</button>
   </header>
 
   <main id="screens">
@@ -36,74 +34,80 @@
         <button id="btn-fitall" title="Ver todos los puntos">🗺️</button>
       </div>
       <div class="map-legend">
-        <span><i class="sw rojo"></i>Necesita</span>
-        <span><i class="sw ambar"></i>Parcial</span>
-        <span><i class="sw verde"></i>Cubierto</span>
-        <span><i class="sw rescate"></i>Rescate</span>
+        <strong>Colores del mapa</strong>
+        <span><i class="sw rojo"></i>Necesita ayuda</span>
+        <span><i class="sw ambar"></i>Ayuda a medias</span>
+        <span><i class="sw verde"></i>Ya tiene ayuda</span>
+        <span><i class="sw rescate"></i>Faltan rescatistas</span>
       </div>
-      <button class="fab" data-add="punto">+ Reportar punto</button>
+      <button class="fab" data-add="punto">＋ Avisar qué falta</button>
     </section>
 
     <!-- PUNTOS / BALANCE -->
     <section class="screen" id="screen-puntos">
       <div class="head">
-        <h1>Balance de ayudas</h1>
-        <p class="sub">Dónde falta y dónde sobra, por zona. El rojo es lo abandonado.</p>
+        <h1>Lugares</h1>
+        <p class="sub">Dónde falta ayuda y dónde ya sobra. Lo rojo es lo que está más solo.</p>
       </div>
       <div class="filters" id="filtros-depto"></div>
       <div class="resumen" id="resumen-balance"></div>
       <div class="list" id="lista-puntos"></div>
-      <button class="fab" data-add="punto">+ Reportar punto</button>
+      <button class="fab" data-add="punto">＋ Avisar qué falta</button>
     </section>
 
     <!-- ENTREGAS -->
     <section class="screen" id="screen-entregas">
       <div class="head">
         <h1>Entregas</h1>
-        <p class="sub">Quién entregó qué y dónde, con foto. Marca "recibido" para saber a dónde llegó de verdad.</p>
+        <p class="sub">Anota lo que llevaste, con una foto. Marca “Ya llegó” para saber que sí llegó.</p>
       </div>
       <div class="list" id="lista-entregas"></div>
-      <button class="fab" data-add="entrega">+ Registrar entrega</button>
+      <button class="fab" data-add="entrega">＋ Anotar una entrega</button>
     </section>
 
     <!-- DONAR / DINERO -->
     <section class="screen" id="screen-donar">
       <div class="head">
-        <h1>Ayudas y dinero</h1>
-        <p class="sub">Cuentas y puntos de recolección oficiales. Registra tu aporte con comprobante para dejar rastro.</p>
+        <h1>Donar</h1>
+        <p class="sub">Cuentas y puntos para ayudar. Anota tu donación con la foto del recibo para dejar rastro.</p>
       </div>
       <div class="seg">
-        <button class="seg-btn active" data-seg="fuentes">Cuentas / puntos</button>
-        <button class="seg-btn" data-seg="aportes">Aportes registrados</button>
+        <button class="seg-btn active" data-seg="fuentes">Cuentas y puntos</button>
+        <button class="seg-btn" data-seg="aportes">Donaciones</button>
       </div>
       <div class="list" id="lista-fuentes"></div>
       <div class="list hidden" id="lista-aportes"></div>
-      <button class="fab" data-add="fuente">+ Agregar cuenta</button>
+      <button class="fab" data-add="fuente">＋ Agregar una cuenta</button>
     </section>
 
     <!-- INFO -->
     <section class="screen" id="screen-info">
-      <div class="head"><h1>Cómo funciona</h1></div>
+      <div class="head"><h1>Cómo se usa</h1></div>
+      <button id="btn-tour" class="btn-sec big" style="margin:0 16px 4px">▶ Ver la guía paso a paso</button>
       <div class="info-card">
-        <h3>Funciona sin internet</h3>
-        <p>La app se guarda en tu celular. Puedes reportar puntos y entregas sin señal: se guardan aquí y se envían solas apenas vuelve un poco de red.</p>
+        <h3>🗺️ El mapa</h3>
+        <p>Cada punto de color es un lugar. Rojo = necesita ayuda, verde = ya tiene. Tócalo para ver qué le falta.</p>
       </div>
       <div class="info-card">
-        <h3>Guardar el mapa de una zona</h3>
-        <p>Abre el mapa de la zona <b>una vez con internet</b> (acércate y aléjate). Queda guardado para verlo después sin señal.</p>
+        <h3>＋ Avisar qué falta</h3>
+        <p>Toca el botón grande de abajo. Escribe el lugar, cuánta gente hay y qué necesitan (agua, comida, colchones…). Así los que ayudan saben a dónde ir.</p>
       </div>
       <div class="info-card">
-        <h3>Instalar como app</h3>
-        <p>En el navegador: menú → <b>“Agregar a pantalla de inicio”</b>. Queda como una app normal, sin tiendas.</p>
+        <h3>📦 Anotar una entrega</h3>
+        <p>Si llevaste ayuda a un lugar, anótala con una foto. Cuando la reciban, se marca “Ya llegó”. Así se ve que la ayuda sí llegó.</p>
       </div>
       <div class="info-card">
-        <h3>El dinero, con rastro</h3>
-        <p>Cada aporte queda registrado con comprobante y se marca <b>confirmado</b> cuando se verifica que llegó. Así se ve a dónde llegó cada ayuda.</p>
+        <h3>📶 Funciona sin internet</h3>
+        <p>La app se guarda en tu celular. Puedes usarla sin señal: lo que anotes se envía solo cuando vuelva un poco de internet.</p>
+      </div>
+      <div class="info-card">
+        <h3>📲 Tenerla como app</h3>
+        <p>En el menú del navegador toca <b>“Agregar a pantalla de inicio”</b>. Queda con su ícono, como cualquier app, sin descargar nada.</p>
       </div>
       <div class="info-card muted">
         <p id="pending-info">Sincronización: —</p>
-        <button id="btn-sync" class="btn-sec">Sincronizar ahora</button>
-        <button id="btn-share" class="btn-sec">Compartir la app</button>
+        <button id="btn-sync" class="btn-sec">Enviar lo pendiente ahora</button>
+        <button id="btn-share" class="btn-sec">Compartir la app con alguien</button>
       </div>
       <p class="foot">Hecho para ayudar · Colombia 2026</p>
     </section>
@@ -111,14 +115,14 @@
 
   <nav class="tabbar">
     <button class="tab active" data-screen="mapa"><span>🗺️</span>Mapa</button>
-    <button class="tab" data-screen="puntos"><span>⚖️</span>Balance</button>
+    <button class="tab" data-screen="puntos"><span>📋</span>Lugares</button>
     <button class="tab" data-screen="entregas"><span>📦</span>Entregas</button>
-    <button class="tab" data-screen="donar"><span>💚</span>Ayudas</button>
-    <button class="tab" data-screen="info"><span>ℹ️</span>Info</button>
+    <button class="tab" data-screen="donar"><span>💚</span>Donar</button>
+    <button class="tab" data-screen="info"><span>❓</span>Ayuda</button>
   </nav>
 </div>
 
-<!-- MODAL -->
+<!-- MODAL (formularios) -->
 <div id="modal" class="modal hidden">
   <div class="sheet">
     <div class="sheet-head">
@@ -129,9 +133,40 @@
   </div>
 </div>
 
+<!-- PREGUNTA SIMPLE (reemplaza los popups del navegador) -->
+<div id="ask" class="modal hidden">
+  <div class="sheet ask-sheet">
+    <div class="sheet-body">
+      <h2 id="ask-title">—</h2>
+      <p id="ask-msg" class="ask-msg"></p>
+      <input id="ask-input" class="ask-input" placeholder="">
+      <div class="ask-actions">
+        <button id="ask-cancel" class="btn-sec">Cancelar</button>
+        <button id="ask-ok" class="btn-primary" style="margin-top:0">Aceptar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BIENVENIDA / GUÍA -->
+<div id="welcome" class="welcome hidden">
+  <div class="welcome-box">
+    <span class="welcome-logo">RA</span>
+    <h1>Red de Ayuda</h1>
+    <p class="welcome-lead">Para organizar la ayuda del terremoto: ver dónde hace falta y que la ayuda de verdad llegue.</p>
+    <div class="welcome-steps">
+      <div class="wstep"><span>🗺️</span><div><b>Mira el mapa</b><br>los lugares en rojo necesitan ayuda</div></div>
+      <div class="wstep"><span>📋</span><div><b>Avisa qué falta</b><br>agua, comida, colchones, medicina…</div></div>
+      <div class="wstep"><span>📦</span><div><b>Anota lo que entregaste</b><br>así se sabe que la ayuda llegó</div></div>
+    </div>
+    <p class="welcome-net">📶 Funciona sin internet</p>
+    <button id="welcome-go" class="btn-primary">Empezar</button>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
