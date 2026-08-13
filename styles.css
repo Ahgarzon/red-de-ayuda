@@ -19,15 +19,17 @@
   --safe-bot:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;position:fixed;width:100%;background:var(--surface)}
+html,body{margin:0;height:100%;width:100%;max-width:100vw;overflow:hidden;position:fixed;left:0;top:0;background:var(--surface);overscroll-behavior:none}
 body{
   font-family:-apple-system,'Segoe UI',Roboto,'Liberation Sans','DejaVu Sans',sans-serif;
   color:var(--text);
   font-size:17.5px;line-height:1.45;overscroll-behavior:none;
+  /* nada se desliza a los lados: solo scroll vertical en toda la app */
+  touch-action:pan-y;overscroll-behavior-x:none;
 }
 /* La app llena SIEMPRE toda la pantalla (iPhone y Android), sin hueco blanco abajo.
    position:fixed+inset:0 evita el bug de 100dvh que dejaba una franja vacía. */
-#app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--canvas)}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--canvas);overflow:hidden;max-width:100vw}
 
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
@@ -51,7 +53,9 @@ body{
 .help-btn:active{transform:scale(.96)}
 
 #screens{flex:1;overflow:hidden;position:relative}
-.screen{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:16px;display:none}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:16px;display:none}
+/* listas: solo scroll vertical (no se corren de lado). El mapa queda libre para arrastrar. */
+#screen-puntos,#screen-entregas,#screen-donar,#screen-info{touch-action:pan-y}
 .screen.active{display:block}
 #screen-mapa.active{display:block}
 
@@ -87,7 +91,7 @@ body{
 .fab:active{transform:scale(.97)}
 
 /* FILTROS */
-.filters{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;-webkit-overflow-scrolling:touch}
+.filters{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain}
 .chip{
   flex:none;background:var(--surface);border:1px solid var(--border);color:var(--text-soft);
   padding:9px 16px;border-radius:20px;font-size:15px;font-weight:600
@@ -149,10 +153,11 @@ body{
    color (no queda franja blanca): el padding inferior es la safe-area y comparte fondo. */
 .tabbar{
   display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none;
-  padding-bottom:var(--safe-bot)
+  /* pega la barra al borde: solo lo justo para librar el gesto del iPhone, sin franja blanca de más */
+  padding-bottom:max(6px, calc(var(--safe-bot) - 12px))
 }
 .tab{
-  flex:1;background:none;border:none;padding:8px 2px calc(6px);color:var(--text-soft);
+  flex:1;background:none;border:none;padding:7px 2px 5px;color:var(--text-soft);
   font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px
 }
 .tab .ti{display:block;height:25px}
