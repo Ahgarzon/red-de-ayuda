@@ -34,8 +34,11 @@ body{
 }
 .brand{display:flex;align-items:center;gap:10px}
 .logo{
-  width:40px;height:40px;border-radius:11px;background:#fff;color:var(--accent);
-  display:grid;place-items:center;font-weight:800;font-size:16px;letter-spacing:.5px;
+  width:40px;height:40px;border-radius:11px;
+  background:linear-gradient(to bottom,#FCD116 0 50%,#003893 50% 75%,#CE1126 75% 100%);
+  color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);
+  display:grid;place-items:center;font-size:19px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);
 }
 .brand strong{display:block;font-size:18px;line-height:1.1}
 .brand small{display:block;font-size:12.5px;opacity:.85}
@@ -142,7 +145,8 @@ body{
 
 /* TABBAR */
 .tabbar{
-  display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none
+  display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none;
+  padding-bottom:var(--safe-bot)
 }
 .tab{
   flex:1;background:none;border:none;padding:9px 2px 8px;color:var(--text-soft);
@@ -152,13 +156,10 @@ body{
 .tab.active{color:var(--accent)}
 .tab.active span{transform:scale(1.06)}
 
-/* MARCA DE AGUA — llena la franja inferior (área del gesto) y da la firma */
-.madeby{
-  flex:none;text-align:center;background:var(--surface);
-  color:var(--text-soft);font-size:11px;font-weight:600;letter-spacing:.02em;
-  padding:5px 0 calc(5px + var(--safe-bot))
-}
-.madeby span{color:var(--accent);font-weight:800;letter-spacing:.06em}
+/* Enlace Instagram y firma discreta en Info */
+.ig-link{display:inline-block;margin-top:9px;color:var(--accent);font-size:15.5px;font-weight:700;text-decoration:none}
+.ig-link:active{opacity:.7}
+.foot-by{opacity:.7;font-size:12px}
 
 /* MODAL */
 .modal{position:fixed;inset:0;z-index:1000;background:rgba(10,20,26,.5);display:flex;align-items:flex-end;justify-content:center}
@@ -202,7 +203,7 @@ textarea{min-height:74px;resize:vertical}
 /* BIENVENIDA */
 .welcome{position:fixed;inset:0;z-index:3000;background:var(--header);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
 .welcome-box{max-width:440px;width:100%;text-align:center;color:#fff;padding:20px 0}
-.welcome-logo{width:64px;height:64px;border-radius:18px;background:#fff;color:var(--accent);display:inline-grid;place-items:center;font-weight:800;font-size:26px;margin-bottom:14px}
+.welcome-logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(to bottom,#FCD116 0 50%,#003893 50% 75%,#CE1126 75% 100%);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);display:inline-grid;place-items:center;font-size:32px;margin-bottom:14px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
 .welcome-box h1{margin:0;font-size:32px;letter-spacing:-.4px}
 .welcome-lead{margin:12px 4px 0;font-size:17px;line-height:1.5;opacity:.95}
 .welcome-steps{display:flex;flex-direction:column;gap:12px;margin:24px 0}
