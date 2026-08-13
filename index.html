@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0f766e" />
+<title>Red de Ayuda · Terremoto Colombia</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">RA</span>
+      <div>
+        <strong>Red de Ayuda</strong>
+        <small>Terremoto · Colombia</small>
+      </div>
+    </div>
+    <div id="netstatus" class="net" title="Estado de conexión">
+      <span class="dot"></span><span id="netlabel">…</span>
+    </div>
+  </header>
+
+  <main id="screens">
+    <!-- MAPA -->
+    <section class="screen active" id="screen-mapa">
+      <div id="map"></div>
+      <div class="map-legend">
+        <span><i class="sw rojo"></i>Necesita</span>
+        <span><i class="sw ambar"></i>Parcial</span>
+        <span><i class="sw verde"></i>Cubierto</span>
+        <span><i class="sw rescate"></i>Rescate</span>
+      </div>
+      <button class="fab" data-add="punto">+ Reportar punto</button>
+    </section>
+
+    <!-- PUNTOS / BALANCE -->
+    <section class="screen" id="screen-puntos">
+      <div class="head">
+        <h1>Balance de ayudas</h1>
+        <p class="sub">Dónde falta y dónde sobra, por zona. El rojo es lo abandonado.</p>
+      </div>
+      <div class="filters" id="filtros-depto"></div>
+      <div class="resumen" id="resumen-balance"></div>
+      <div class="list" id="lista-puntos"></div>
+      <button class="fab" data-add="punto">+ Reportar punto</button>
+    </section>
+
+    <!-- ENTREGAS -->
+    <section class="screen" id="screen-entregas">
+      <div class="head">
+        <h1>Entregas</h1>
+        <p class="sub">Quién entregó qué y dónde, con foto. Marca "recibido" para saber a dónde llegó de verdad.</p>
+      </div>
+      <div class="list" id="lista-entregas"></div>
+      <button class="fab" data-add="entrega">+ Registrar entrega</button>
+    </section>
+
+    <!-- DONAR / DINERO -->
+    <section class="screen" id="screen-donar">
+      <div class="head">
+        <h1>Ayudas y dinero</h1>
+        <p class="sub">Cuentas y puntos de recolección oficiales. Registra tu aporte con comprobante para dejar rastro.</p>
+      </div>
+      <div class="seg">
+        <button class="seg-btn active" data-seg="fuentes">Cuentas / puntos</button>
+        <button class="seg-btn" data-seg="aportes">Aportes registrados</button>
+      </div>
+      <div class="list" id="lista-fuentes"></div>
+      <div class="list hidden" id="lista-aportes"></div>
+      <button class="fab" data-add="fuente">+ Agregar cuenta</button>
+    </section>
+
+    <!-- INFO -->
+    <section class="screen" id="screen-info">
+      <div class="head"><h1>Cómo funciona</h1></div>
+      <div class="info-card">
+        <h3>Funciona sin internet</h3>
+        <p>La app se guarda en tu celular. Puedes reportar puntos y entregas sin señal: se guardan aquí y se envían solas apenas vuelve un poco de red.</p>
+      </div>
+      <div class="info-card">
+        <h3>Guardar el mapa de una zona</h3>
+        <p>Abre el mapa de la zona <b>una vez con internet</b> (acércate y aléjate). Queda guardado para verlo después sin señal.</p>
+      </div>
+      <div class="info-card">
+        <h3>Instalar como app</h3>
+        <p>En el navegador: menú → <b>“Agregar a pantalla de inicio”</b>. Queda como una app normal, sin tiendas.</p>
+      </div>
+      <div class="info-card">
+        <h3>El dinero, con rastro</h3>
+        <p>Cada aporte queda registrado con comprobante y se marca <b>confirmado</b> cuando se verifica que llegó. Así se ve a dónde llegó cada ayuda.</p>
+      </div>
+      <div class="info-card muted">
+        <p id="pending-info">Sincronización: —</p>
+        <button id="btn-sync" class="btn-sec">Sincronizar ahora</button>
+        <button id="btn-share" class="btn-sec">Compartir la app</button>
+      </div>
+      <p class="foot">Hecho para ayudar · Colombia 2026</p>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-screen="mapa"><span>🗺️</span>Mapa</button>
+    <button class="tab" data-screen="puntos"><span>⚖️</span>Balance</button>
+    <button class="tab" data-screen="entregas"><span>📦</span>Entregas</button>
+    <button class="tab" data-screen="donar"><span>💚</span>Ayudas</button>
+    <button class="tab" data-screen="info"><span>ℹ️</span>Info</button>
+  </nav>
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="modal hidden">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="modal-title">—</h2>
+      <button id="modal-close" class="x">✕</button>
+    </div>
+    <form id="modal-form" class="sheet-body"></form>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
