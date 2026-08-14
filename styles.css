@@ -291,3 +291,6 @@ textarea{min-height:74px;resize:vertical}
 .buzon-card textarea{margin-bottom:10px}
 .buzon-card .btn-primary{margin-top:12px}
 .sug-ok{color:#15803d;font-weight:800;margin-top:12px;background:#ecfdf3;border:1px solid #b7f0cf;border-radius:12px;padding:12px 14px;line-height:1.4}
+
+.foto-slot{margin:8px 0}
+.foto-slot .btn-mini{opacity:.85}

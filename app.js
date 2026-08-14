@@ -8,7 +8,7 @@ const LS = {
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, fotos:{} };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -110,14 +110,14 @@ async function pull(table){
 
 async function pullAll(){
   setNet();
-  try {
-    await Promise.all(['puntos','entregas','fuentes','aportes'].map(pull));
-    setNet(true);
-  } catch(e){
-    setNet(false);
-    // usa cache
-    for(const t of ['puntos','entregas','fuentes','aportes']) state[t]=cache(LS[t])||[];
-  }
+  const tablas = ['puntos','entregas','fuentes','aportes'];
+  // Cada tabla se trae POR SEPARADO. Si una falla, NO se toca a las demás y
+  // NUNCA se borra lo que ya estaba: pull() solo reemplaza cuando llega un array
+  // válido del servidor; ante error conserva lo que había (cache/pendientes).
+  // Esto es lo que evita que la app muestre 0 aunque los datos SÍ estén guardados.
+  const res = await Promise.allSettled(tablas.map(pull));
+  const ok = res.filter(r=>r.status==='fulfilled').length;
+  setNet(ok>0);           // hay señal si al menos una tabla respondió
   renderAll();
 }
 
@@ -127,7 +127,11 @@ async function save(table, data){
   try {
     const res = await api('insert', table, { data });
     if(Array.isArray(res) && res[0]){
-      state[table].unshift(res[0]); cache(LS[table], state[table]);
+      // guarda la foto en memoria (el listado ya no la trae; así el autor la sigue viendo)
+      if(data && (data.foto||data.comprobante)) state.fotos[res[0].id]=data.foto||data.comprobante;
+      // no dejamos la foto base64 pesando en el cache local
+      const light=Object.assign({}, res[0]); delete light.foto; delete light.comprobante;
+      state[table].unshift(light); cache(LS[table], state[table]);
       renderAll(); return true;
     }
     throw new Error('sin respuesta');
@@ -328,6 +332,28 @@ function renderPuntos(){
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
 }
 
+/* Foto/comprobante: el listado ya NO trae las fotos base64 (eran enormes y tumbaban
+   la carga). Se muestran bajo demanda: al tocar "Ver foto" se pide esa sola imagen. */
+function fotoSlot(table,id,inline){
+  const src = inline || state.fotos[id];
+  if(src) return `<img class="card-photo" src="${src}" alt="">`;
+  const lbl = table==='aportes' ? '📷 Ver comprobante' : '📷 Ver foto';
+  return `<div class="foto-slot"><button class="btn-mini" data-verfoto="${table}:${id}">${lbl}</button></div>`;
+}
+function wireFotos(cont){
+  cont.querySelectorAll('[data-verfoto]').forEach(b=>b.onclick=async()=>{
+    const [table,id]=b.dataset.verfoto.split(':');
+    const old=b.textContent; b.textContent='Cargando…'; b.disabled=true;
+    try{
+      const res=await api('foto',table,{id});
+      const row=Array.isArray(res)&&res[0]?res[0]:null;
+      const src=row&&(row.foto||row.comprobante);
+      if(src){ state.fotos[id]=src; renderAll(); }
+      else { b.textContent='Sin foto'; }
+    }catch(e){ b.textContent=old; b.disabled=false; toast('No se pudo cargar la foto'); }
+  });
+}
+
 function renderEntregas(){
   const cont=$('#lista-entregas');
   const entregas=vivos('entregas');
@@ -337,7 +363,7 @@ function renderEntregas(){
       <span class="badge ${e.recibido?'verde':'rojo'}">${e.recibido?'Recibido':'En camino'}</span>
       <h3>${esc(e.lugar||'Entrega')}${e._pending?' ⏳':''}</h3>
       <div class="meta">${esc(e.quien_entrego||'—')} · ${new Date(e.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
-      ${e.foto?`<img class="card-photo" src="${e.foto}" alt="">`:''}
+      ${fotoSlot('entregas',e.id,e.foto)}
       <div class="tags"><span class="tag plain">${esc(e.items||'ayuda')}</span></div>
       ${e.recibido&&e.recibido_por?`<div class="meta" style="margin-top:8px">Recibido por: ${esc(e.recibido_por)}</div>`:''}
       <div class="card-actions">
@@ -353,6 +379,7 @@ function renderEntregas(){
     });
   });
   cont.querySelectorAll('[data-dele]').forEach(b=>b.onclick=()=>askConfirm('¿Eliminar esta entrega?','',()=>del('entregas',b.dataset.dele)));
+  wireFotos(cont);
 }
 
 let segDonar='fuentes';
@@ -405,7 +432,7 @@ function renderAportes(){
       <span class="badge ${a.estado==='confirmado'?'verde':'rojo'}">${a.estado==='confirmado'?'Confirmado ✓':'Reportado'}</span>
       <h3>$ ${esc(a.monto||'—')}${a._pending?' ⏳':''}</h3>
       <div class="meta">${esc(a.quien||'Anónimo')}${f?' → '+esc(f.nombre):''} · ${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
-      ${a.comprobante?`<img class="card-photo" src="${a.comprobante}" alt="">`:''}
+      ${fotoSlot('aportes',a.id,a.comprobante)}
       <div class="card-actions">
         ${mine(a)&&a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">✔ El dinero llegó</button>`:''}
       </div>
@@ -416,6 +443,7 @@ function renderAportes(){
       update('aportes',b.dataset.confirmar,{estado:'confirmado', confirmado_por:v||'confirmado'});
     });
   });
+  wireFotos(cont);
 }
 
 /* ================= MAPA ================= */
@@ -820,7 +848,10 @@ function boot(){
   setTimeout(()=>state.map&&state.map.invalidateSize(),300);
   pullAll();          // trae datos del servidor
   flush();            // envía lo pendiente
-  setInterval(()=>{ if(navigator.onLine){ flush(); pullAll(); } }, 45000); // refresco periódico
+  setInterval(()=>{ if(navigator.onLine){ flush(); pullAll(); } }, 12000); // refresco periódico (payload liviano → seguro)
+  // refresco inmediato al volver a la app (otro celular ve el cambio al reabrir, no en 12s)
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && navigator.onLine){ flush(); pullAll(); } });
+  window.addEventListener('focus', ()=>{ if(navigator.onLine){ pullAll(); } });
 
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 }
