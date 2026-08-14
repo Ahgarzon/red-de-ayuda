@@ -176,18 +176,33 @@ async function del(table, id){
 function enqueue(job){ state.queue.push(job); cache(LS.queue, state.queue); updatePending(); }
 
 async function flush(){
-  if(!state.queue.length) return;
-  if(!navigator.onLine) return;
+  if(!state.queue.length) return true;
+  if(!navigator.onLine) return false;
   const rest=[];
   for(const job of state.queue){
     try{
-      if(job.op==='insert') await api('insert', job.table, {data:job.data});
+      if(job.op==='insert'){
+        const res = await api('insert', job.table, {data:job.data});
+        const row = Array.isArray(res)&&res[0] ? res[0] : null;
+        // RECONCILIAR: reemplaza el registro TEMPORAL (tmp_, creado sin señal) por el REAL
+        // que devuelve el servidor. Sin esto, al volver la conexión quedaban DOS copias
+        // (el temporal ⏳ y el real de pullAll) → se veía duplicado.
+        if(row){
+          const arr = state[job.table]||[];
+          if(job.data && (job.data.foto||job.data.comprobante)) state.fotos[row.id]=job.data.foto||job.data.comprobante;
+          const light=Object.assign({}, row); delete light.foto; delete light.comprobante;
+          const i = arr.findIndex(x=>String(x.id)===String(job.__id));
+          if(i>=0) arr[i]=light; else arr.unshift(light);
+          state[job.table]=arr; cache(LS[job.table], arr);
+        }
+      }
       else if(job.op==='update') await api('update', job.table, {id:job.id, data:job.data});
       else if(job.op==='delete') await api('delete', job.table, {id:job.id});
     }catch(e){ rest.push(job); }
   }
-  state.queue=rest; cache(LS.queue, state.queue); updatePending();
-  if(rest.length===0){ toast('Todo sincronizado ✓'); await pullAll(); }
+  state.queue=rest; cache(LS.queue, state.queue); updatePending(); renderAll();
+  if(rest.length===0){ toast('Todo sincronizado ✓'); await pullAll(); return true; }
+  return false;
 }
 
 function updatePending(){

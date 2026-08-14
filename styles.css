@@ -19,11 +19,17 @@
   --safe-bot:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;width:100%;max-width:100vw;overflow:hidden;position:fixed;left:0;top:0;background:var(--surface);overscroll-behavior:none}
+html,body{margin:0;height:100%;width:100%;max-width:100vw;overflow:hidden;position:fixed;left:0;top:0;background:var(--surface);overscroll-behavior:none;
+  /* Android/Chrome NO debe "inflar" solo algunos textos (font-boosting/auto-sizing): eso hacía
+     que en ciertos teléfonos un botón saliera enorme y otro chico. Lo apagamos → proporción
+     pareja en TODO dispositivo, igual que en iPhone. */
+  -webkit-text-size-adjust:100%;-moz-text-size-adjust:100%;text-size-adjust:100%}
 body{
   font-family:-apple-system,'Segoe UI',Roboto,'Liberation Sans','DejaVu Sans',sans-serif;
   color:var(--text);
-  font-size:17.5px;line-height:1.45;overscroll-behavior:none;
+  /* Letra FLUIDA: escala con el ancho real del teléfono, con piso (pantallas de 320px)
+     y tope 17.5px = tal como se ve hoy en iPhone. Así se ve proporcionado en cualquiera. */
+  font-size:clamp(15px, 4.6vw, 17.5px);line-height:1.45;overscroll-behavior:none;
   /* nada se desliza a los lados: solo scroll vertical en toda la app */
   touch-action:pan-y;overscroll-behavior-x:none;
 }
@@ -36,19 +42,20 @@ body{
   padding:calc(9px + var(--safe-top)) 16px 9px;
   background:var(--header);color:#fff;flex:none;
 }
-.brand{display:flex;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand>div{min-width:0}
 .logo{
-  width:40px;height:40px;border-radius:11px;
+  width:clamp(34px,9.6vw,40px);height:clamp(34px,9.6vw,40px);border-radius:11px;flex:none;
   background:linear-gradient(to bottom,#FCD116 0 50%,#003893 50% 75%,#CE1126 75% 100%);
   color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);
-  display:grid;place-items:center;font-size:19px;
+  display:grid;place-items:center;font-size:clamp(16px,4.8vw,19px);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);
 }
-.brand strong{display:block;font-size:18px;line-height:1.1}
-.brand small{display:block;font-size:12.5px;opacity:.85}
+.brand strong{display:block;font-size:clamp(15.5px,4.6vw,18px);line-height:1.1}
+.brand small{display:block;font-size:clamp(11px,3.2vw,12.5px);opacity:.85}
 .help-btn{
   background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:20px;
-  padding:9px 14px;font-size:14px;font-weight:700;flex:none;white-space:nowrap;
+  padding:clamp(8px,2.4vw,9px) clamp(11px,3.4vw,14px);font-size:clamp(12.5px,3.6vw,14px);font-weight:700;flex:none;white-space:nowrap;
   display:inline-flex;align-items:center;gap:7px;line-height:1
 }
 .help-btn svg{width:18px;height:18px;display:block;flex:none}
@@ -62,7 +69,7 @@ body{
 #screen-mapa.active{display:block}
 
 .head{padding:16px 16px 4px}
-.head h1{margin:0;font-size:26px;letter-spacing:-.3px}
+.head h1{margin:0;font-size:clamp(21px,6.4vw,26px);letter-spacing:-.3px}
 .head .sub{margin:5px 0 0;color:var(--text-soft);font-size:15px;line-height:1.4}
 
 /* MAPA */
@@ -79,8 +86,8 @@ body{
 .map-legend span{display:flex;align-items:center;gap:8px}
 .map-ctrls{position:absolute;right:12px;top:12px;z-index:600;display:flex;flex-direction:column;gap:8px}
 .map-ctrls button{
-  width:50px;height:50px;border-radius:14px;border:1px solid var(--border);
-  background:var(--surface);box-shadow:var(--shadow);font-size:22px;line-height:1;
+  width:clamp(44px,12vw,50px);height:clamp(44px,12vw,50px);border-radius:14px;border:1px solid var(--border);
+  background:var(--surface);box-shadow:var(--shadow);font-size:clamp(19px,5.6vw,22px);line-height:1;
   display:flex;align-items:center;justify-content:center;cursor:pointer
 }
 .map-ctrls button:active{transform:scale(.94)}
@@ -89,9 +96,9 @@ body{
 .sw.verde{background:var(--verde)}.sw.rescate{background:var(--rescate)}
 
 .fab{
-  position:absolute;right:16px;bottom:calc(16px + var(--safe-bot));z-index:600;
-  background:var(--header);color:#fff;border:none;border-radius:28px;
-  padding:16px 22px;font-size:17px;font-weight:800;box-shadow:0 8px 20px rgba(54,70,217,.42);
+  position:absolute;right:16px;bottom:calc(16px + var(--safe-bot));z-index:600;max-width:calc(100vw - 32px);
+  background:var(--header);color:#fff;border:none;border-radius:28px;white-space:nowrap;
+  padding:clamp(13px,3.8vw,16px) clamp(16px,5vw,22px);font-size:clamp(15px,4.4vw,17px);font-weight:800;box-shadow:0 8px 20px rgba(54,70,217,.42);
 }
 .fab:active{transform:scale(.97)}
 
@@ -104,7 +111,7 @@ body{
 .addbar{flex:none;background:var(--surface);border-top:1px solid var(--border);
   padding:10px 16px calc(10px + max(0px, calc(var(--safe-bot) - 18px)))}
 .fab-full{width:100%;background:var(--header);color:#fff;border:none;border-radius:16px;
-  padding:16px;font-size:17px;font-weight:800;box-shadow:0 6px 16px rgba(54,70,217,.32)}
+  padding:clamp(13px,3.9vw,16px);font-size:clamp(15px,4.4vw,17px);font-weight:800;box-shadow:0 6px 16px rgba(54,70,217,.32)}
 .fab-full:active{transform:scale(.99)}
 
 /* video tutorial en Ayuda */
@@ -125,15 +132,15 @@ body{
 .filters{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain}
 .chip{
   flex:none;background:var(--surface);border:1px solid var(--border);color:var(--text-soft);
-  padding:9px 16px;border-radius:20px;font-size:15px;font-weight:600
+  padding:9px clamp(11px,3.6vw,16px);border-radius:20px;font-size:clamp(13px,3.8vw,15px);font-weight:600;white-space:nowrap
 }
 .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
 
 .resumen{display:flex;gap:8px;padding:8px 16px}
-.stat{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 8px;text-align:center;box-shadow:var(--shadow)}
-.stat b{display:block;font-size:26px;line-height:1}
+.stat{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 6px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:clamp(20px,6.2vw,26px);line-height:1}
 .stat.r b{color:var(--rojo)}.stat.g b{color:var(--verde)}.stat.a b{color:var(--ambar)}
-.stat small{color:var(--text-soft);font-size:12.5px}
+.stat small{color:var(--text-soft);font-size:clamp(11px,3.2vw,12.5px)}
 
 /* LISTAS */
 .list{padding:8px 16px 96px;display:flex;flex-direction:column;gap:12px}
@@ -145,7 +152,7 @@ body{
 .card.ambar{border-left-color:var(--ambar)}
 .card.verde{border-left-color:var(--verde)}
 .card.rescate{border-left-color:var(--rescate)}
-.card h3{margin:0 0 3px;font-size:19px}
+.card h3{margin:0 0 3px;font-size:clamp(17px,4.8vw,19px)}
 .card .meta{color:var(--text-soft);font-size:14px;margin-bottom:8px}
 .tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
 .tag{font-size:14px;padding:6px 11px;border-radius:9px;font-weight:600}
@@ -158,7 +165,7 @@ body{
 .badge.rescate{background:#fbe0ef;color:#a3166b}
 .card-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .card-photo{width:100%;height:180px;object-fit:cover;border-radius:12px;margin:8px 0;background:var(--surface-2)}
-.btn-mini{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 15px;font-size:15px;font-weight:700;color:var(--text)}
+.btn-mini{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px clamp(11px,3.6vw,15px);font-size:clamp(13.5px,3.9vw,15px);font-weight:700;color:var(--text)}
 .btn-mini.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn-mini.ok{background:var(--verde);color:#fff;border-color:var(--verde)}
 .only-owner{font-size:13px;color:var(--text-soft);display:inline-flex;align-items:center;gap:6px;padding:6px 2px;font-weight:600}
@@ -168,7 +175,9 @@ body{
 
 /* SEGMENT */
 .seg{display:flex;gap:6px;padding:12px 16px 0}
-.seg-btn{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:13px 8px;font-weight:700;color:var(--text-soft);font-size:15px}
+.seg-btn{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;
+  padding:13px clamp(4px,2vw,8px);font-weight:700;color:var(--text-soft);font-size:clamp(12px,3.7vw,15px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
 .seg-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* INFO */
@@ -188,11 +197,12 @@ body{
   padding-bottom:max(3px, calc(var(--safe-bot) - 20px))
 }
 .tab{
-  flex:1;background:none;border:none;padding:6px 2px 2px;color:var(--text-soft);
-  font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px
+  flex:1;min-width:0;background:none;border:none;padding:6px 1px 2px;color:var(--text-soft);
+  font-size:clamp(10px,3.1vw,12px);font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%
 }
-.tab .ti{display:block;height:25px}
-.tab .ti svg{width:25px;height:25px;display:block}
+.tab .ti{display:block;height:clamp(22px,6.2vw,25px)}
+.tab .ti svg{width:clamp(22px,6.2vw,25px);height:clamp(22px,6.2vw,25px);display:block}
 .tab.active{color:var(--accent)}
 .tab.active .ti{transform:scale(1.05)}
 
@@ -300,12 +310,13 @@ textarea{min-height:74px;resize:vertical}
 .foto-slot{margin:8px 0}
 .foto-slot .btn-mini{opacity:.85}
 
-/* ===== v19: proporción de botones en pantallas angostas ===== */
-.seg-btn{min-width:0;line-height:1.15}
-@media (max-width:360px){
-  .seg-btn{font-size:13.5px;padding:12px 5px}
-  .fab{padding:14px 18px;font-size:15.5px}
-  .help-btn{padding:8px 11px;font-size:13px}
+/* ===== v22: proporción pareja en TODO teléfono. El tamaño ya es fluido (clamp) en cada
+   componente de arriba, así que no hace falta forzar valores por breakpoint. Solo damos
+   un respiro extra de aire en pantallas muy angostas para que nada quede apretado. ===== */
+@media (max-width:340px){
+  .head{padding:12px 12px 4px}
+  .seg,.filters,.resumen,.list{padding-left:12px;padding-right:12px}
+  .addbar{padding-left:12px;padding-right:12px}
 }
 
 /* ===== v19: vista de ESCRITORIO / PC — la app se centra como un celular, no estirada ===== */
