@@ -1,7 +1,7 @@
-const APP='ayuda-v15';
+const APP='ayuda-v16';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
-  './','./index.html','./styles.css?v=15','./app.js?v=15','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=16','./app.js?v=16','./manifest.webmanifest',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -21,6 +21,8 @@ self.addEventListener('fetch', e=>{
   const req=e.request;
   if(req.method!=='GET') return;                       // el API (POST) nunca se cachea
   const url=new URL(req.url);
+  // Video tutorial: solo red, nunca se cachea (evita inflar el almacenamiento offline con ~4MB)
+  if(/\.mp4($|\?)/.test(url.pathname+url.search)){ return; }
   // Tiles del mapa: cache-first (guarda la zona ya vista para verla sin señal)
   if(/tile\.openstreetmap\.org|tile\.opentopomap\.org|basemaps\.cartocdn\.com/.test(url.hostname)){
     e.respondWith(caches.open(TILES).then(async c=>{

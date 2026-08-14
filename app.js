@@ -572,8 +572,22 @@ function openForm(kind, prefill={}, editId=null){
       <button class="btn-primary" type="submit">${editId?'Guardar cambios':'Guardar punto'}</button>`;
   } else if(kind==='entrega'){
     title.textContent='Anotar una entrega';
+    // Lugares YA reportados (con ubicación) para tocar y marcar rápido, sin escribir ni ubicar a mano
+    const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
+    const destinos=vivos('puntos').filter(p=>p.lat!=null&&p.lng!=null).sort((a,b)=>urgScore(b)-urgScore(a));
+    const destHtml=destinos.length?`
+      <label>¿A qué lugar entregaste? <span style="font-weight:600;color:var(--text-soft)">(toca uno)</span></label>
+      <div class="destinos" id="destinos">
+        ${destinos.map(p=>`<button type="button" class="destino" data-lat="${p.lat}" data-lng="${p.lng}" data-nom="${esc(p.nombre)}">
+          <span class="dot" style="background:${cols[color(p)]}"></span>
+          <span class="dnom">${esc(p.nombre)}</span>
+          <span class="dmeta">${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}</span>
+        </button>`).join('')}
+      </div>
+      <div class="help">Al tocar un lugar se pone su nombre y se marca solo en el mapa. Si no está en la lista, escríbelo abajo.</div>`:'';
     f.innerHTML=`
-      <label>¿A dónde se entregó? *</label><input name="lugar" placeholder="Lugar / vereda / punto" required>
+      ${destHtml}
+      <label>${destinos.length?'Lugar de la entrega *':'¿A dónde se entregó? *'}</label><input name="lugar" placeholder="Lugar / vereda / punto" required>
       <label>¿Quién entrega?</label><input name="quien_entrego" placeholder="Tu nombre u organización">
       <label>¿Qué se entregó?</label><input name="items" placeholder="Ej: 20 colchones, agua, mercados">
       <label>Foto de la entrega (prueba)</label>
@@ -647,6 +661,13 @@ function openForm(kind, prefill={}, editId=null){
   // mini-mapa selector (punto, entrega, y centro de acopio)
   const acopioActivo = ()=> f.querySelector('#tipo-fuente') && f.querySelector('#tipo-fuente').value==='recoleccion';
   if(kind==='punto'||kind==='entrega'|| (kind==='fuente'&&acopioActivo())) initPickMap();
+  // Entrega: tocar un lugar ya reportado rellena el nombre y marca su punto en el mapa
+  f.querySelectorAll('.destino').forEach(b=>b.onclick=()=>{
+    f.querySelectorAll('.destino').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    const inp=f.querySelector('input[name="lugar"]'); if(inp) inp.value=b.dataset.nom;
+    setPick(parseFloat(b.dataset.lat), parseFloat(b.dataset.lng), 15);
+  });
   // cambiar entre Cuenta / Centro de acopio muestra los campos correctos y prende el mapa
   const tsel=f.querySelector('#tipo-fuente');
   if(tsel) tsel.onchange=()=>{
