@@ -1,7 +1,7 @@
-const APP='ayuda-v30';
+const APP='ayuda-v31';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
-  './','./index.html','./styles.css?v=30','./app.js?v=30','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=31','./app.js?v=31','./manifest.webmanifest',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -17,23 +17,16 @@ self.addEventListener('activate', e=>{
     const ks = await caches.keys();
     await Promise.all(ks.filter(k=>k!==APP&&k!==TILES).map(k=>caches.delete(k)));
     await self.clients.claim();
-    /* AUTO-SANACIÓN (lo que evita que un celular se quede para SIEMPRE con la app vieja/vacía):
-       cuando se activa una versión NUEVA del service worker, se recarga UNA sola vez cada
-       pestaña abierta para que tome el código fresco de la red. Así, un celular que había
-       abierto una versión anterior (Service Worker cache-first) NO necesita que el usuario
-       cierre y reabra: se arregla solo. Solo pasa al cambiar de versión (una vez por versión),
-       así que NO hay bucle de recargas. */
-    const clientes = await self.clients.matchAll({type:'window'});
-    for(const c of clientes){
-      try{ await c.navigate(c.url); }catch(err){ try{ c.postMessage({type:'sw-updated'}); }catch(e2){} }
-    }
+    /* AUTO-SANACIÓN: al activar una versión NUEVA del SW, avisamos a las pestañas abiertas
+       para que tomen el código fresco con UNA sola recarga (la hace la página, con bandera
+       anti-bucle). Ya no forzamos navigate() desde el SW: eso podía volver a colgar en señal
+       débil. clients.claim() dispara controllerchange en la página → recarga una vez. */
+    const cs = await self.clients.matchAll({type:'window'});
+    for(const c of cs){ try{ c.postMessage({type:'sw-updated'}); }catch(e2){} }
   })());
 });
 
-/* ¿Es el "cascarón" de la app (HTML/JS/CSS/manifest)? Ese SIEMPRE se busca fresco en
-   la red cuando hay señal (network-first). Así, apenas se publica una versión nueva,
-   TODOS los celulares con internet la reciben al abrir — nunca se quedan con código
-   viejo que muestre la app vacía. Sin señal, cae al último guardado. */
+/* ¿Es el "cascarón" de la app (HTML/JS/CSS/manifest)? */
 function esCascaron(url, req){
   if(req.mode==='navigate') return true;
   if(url.origin!==location.origin) return false;
@@ -60,17 +53,34 @@ self.addEventListener('fetch', e=>{
     return;
   }
 
-  // CASCARÓN (HTML/JS/CSS/manifest): NETWORK-FIRST. Siempre la última versión si hay red.
+  // CASCARÓN (HTML/JS/CSS/manifest): NETWORK-FIRST **CON TIEMPO LÍMITE**.
+  // Antes era network-first SIN límite: en señal débil (lo normal en zona de desastre) el
+  // fetch NO fallaba rápido, se QUEDABA COLGADO hasta el timeout del sistema (20-60s) y en
+  // ese rato la app quedaba EN BLANCO y los botones muertos (boot() nunca corría). Ahora:
+  // si hay copia guardada y la red tarda más de 3.5s, servimos la copia AL INSTANTE (nunca
+  // pantalla blanca) y la red sigue en 2º plano para dejar el caché fresco para la próxima.
+  // Si la red responde rápido y bien, se usa esa (siempre la última versión con buena señal).
   if(esCascaron(url, req)){
     e.respondWith((async()=>{
-      try{
-        const res=await fetch(req);
-        if(res&&res.ok && url.origin===location.origin){ const c=await caches.open(APP); c.put(req,res.clone()); }
-        return res;
-      }catch(err){
-        const hit=await caches.match(req);
-        return hit || caches.match('./index.html') || Response.error();
+      const cached = await caches.match(req);
+      // net → resuelve a la respuesta SOLO si llegó y es válida; si falla o no-ok, resuelve null
+      const net = fetch(req).then(res=>{
+        if(res && res.ok){
+          if(url.origin===location.origin){ caches.open(APP).then(c=>c.put(req,res.clone())); }
+          return res;
+        }
+        return null;
+      }).catch(()=>null);
+
+      if(cached){
+        // carrera: la red vs 3.5s. Gana lo primero; si la red no llegó a tiempo → copia guardada.
+        const timeout = new Promise(r=> setTimeout(()=>r(null), 3500));
+        const winner = await Promise.race([ net, timeout ]);
+        return winner || cached;
       }
+      // Primera vez (sin copia guardada): dependemos de la red, con respaldo al index guardado.
+      const res = await net;
+      return res || (await caches.match('./index.html')) || Response.error();
     })());
     return;
   }

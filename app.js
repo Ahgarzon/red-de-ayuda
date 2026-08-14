@@ -995,8 +995,8 @@ function boot(){
   window.addEventListener('online', ()=>{ setNet(true); flush(); });
   window.addEventListener('offline', ()=>setNet(false));
 
-  initMap();          // el mapa es la pantalla inicial
-  setTimeout(()=>state.map&&state.map.invalidateSize(),300);
+  try{ initMap(); }catch(e){ console.warn('initMap', e); }   // un error del mapa NUNCA debe frenar el resto del arranque (red, SW, botones)
+  setTimeout(()=>{ try{ state.map&&state.map.invalidateSize(); }catch(e){} },300);
   pullAll();          // trae datos del servidor
   flush();            // envía lo pendiente
   pingLive();         // registra este dispositivo y trae el contador de visitantes
