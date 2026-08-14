@@ -8,7 +8,7 @@ const LS = {
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, fotos:{} };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, fotos:{}, _mk:[] };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -77,6 +77,20 @@ function distKm(a,b){
   return 2*R*Math.asin(Math.sqrt(x));
 }
 function fmtKm(d){ if(d==null) return ''; return d<1 ? Math.round(d*1000)+' m' : (d<10?d.toFixed(1):Math.round(d))+' km'; }
+/* Link a Google Maps con NAVEGACIÓN (Cómo llegar) hasta un punto exacto. Abre la app de mapas del celular. */
+function mapsDir(lat,lng){ return 'https://www.google.com/maps/dir/?api=1&destination='+(+lat)+','+(+lng); }
+/* Geocodificar: convierte una dirección o nombre escrito en coordenadas (OSM Nominatim, gratis, con CORS).
+   Sirve para ubicar un lugar SIN arrastrar el pin a mano — escribes "KPOPAYAN, Popayán" y cae el pin ahí. */
+async function geocode(q){
+  q=(q||'').trim(); if(q.length<3) return [];
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=co&accept-language=es&q='+encodeURIComponent(q);
+  try{
+    const r=await fetch(url,{headers:{'Accept':'application/json'}});
+    if(!r.ok) return [];
+    const j=await r.json();
+    return (j||[]).map(x=>({lat:+x.lat,lng:+x.lon,label:x.display_name}));
+  }catch(e){ return []; }
+}
 /* puntaje de URGENCIA: rescate y vidas primero, luego criticidad, semáforo, faltantes y gente */
 function urgScore(p){
   let s=0;
@@ -555,9 +569,40 @@ function initMap(){
   const bl=$('#btn-locate'), bf=$('#btn-fitall');
   if(bl) bl.onclick=()=>locateMe(true);
   if(bf) bf.onclick=()=>{ userMoved=false; mapFitDone=false; fitToPoints(); };
+  initMapSearch();
   // ubicar al usuario suave al abrir (sin forzar si ya movió)
   locateMe(false);
   renderMap();
+}
+// Buscador del mapa: primero busca entre los lugares YA cargados (vuela a él y abre su ficha);
+// si no hay ninguno que coincida, geocodifica el texto con Nominatim y cae ahí.
+let searchMarker=null;
+function initMapSearch(){
+  const q=document.getElementById('map-q'), res=document.getElementById('map-res');
+  if(!q||!res) return;
+  const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g'),'');
+  const run=async()=>{
+    const term=q.value.trim(); if(term.length<2){ res.innerHTML=''; res.classList.remove('on'); return; }
+    const nt=norm(term);
+    const locales=(state._mk||[]).filter(x=>norm(x.nombre).includes(nt)||norm(x.muni).includes(nt)).slice(0,6);
+    let html=locales.map((x,i)=>'<button type="button" class="map-hit" data-loc="'+i+'">📍 <b>'+esc(x.nombre)+'</b><span>'+esc(x.muni)+'</span></button>').join('');
+    res.innerHTML=html+'<div class="geo-hint">Buscando también en el mapa de Colombia…</div>';
+    res.classList.add('on');
+    res.querySelectorAll('.map-hit').forEach(b=>b.onclick=()=>{ const x=locales[+b.dataset.loc]; userMoved=true; state.map.setView([x.lat,x.lng],16); if(x.m&&x.m.openPopup) x.m.openPopup(); closeSearch(); });
+    const hits=await geocode(term);
+    const geo=hits.map((h,i)=>'<button type="button" class="map-hit geo" data-geo="'+i+'">🗺️ '+esc(h.label)+'</button>').join('');
+    res.innerHTML=html+(geo?'<div class="geo-hint">Otros lugares (Google/OSM):</div>'+geo:(locales.length?'':'<div class="geo-hint">No encontré ese lugar.</div>'));
+    res.querySelectorAll('.map-hit:not(.geo)').forEach(b=>b.onclick=()=>{ const x=locales[+b.dataset.loc]; userMoved=true; state.map.setView([x.lat,x.lng],16); if(x.m&&x.m.openPopup) x.m.openPopup(); closeSearch(); });
+    res.querySelectorAll('.map-hit.geo').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.geo]; userMoved=true; state.map.setView([h.lat,h.lng],16);
+      if(searchMarker) state.map.removeLayer(searchMarker);
+      searchMarker=L.marker([h.lat,h.lng],{icon:pinIcon('#111','🔎')}).addTo(state.map);
+      searchMarker.bindPopup('<b>'+esc(h.label)+'</b><br><a href="'+mapsDir(h.lat,h.lng)+'" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>').openPopup();
+      closeSearch(); });
+  };
+  const closeSearch=()=>{ res.classList.remove('on'); };
+  let t=null;
+  q.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(run,450); });
+  q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); clearTimeout(t); run(); } });
 }
 function locateMe(center){
   if(!navigator.geolocation || !state.map) return;
@@ -586,28 +631,34 @@ function fitToPoints(){
 function renderMap(){
   if(!state.markers) return;
   state.markers.clearLayers();
+  state._mk=[];  // índice nombre→marcador para el buscador del mapa
   const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
   vivos('puntos').forEach(p=>{
     if(p.lat==null||p.lng==null) return;
     const c=color(p);
-    const m=L.circleMarker([p.lat,p.lng],{radius:12,color:'#fff',weight:2,fillColor:cols[c],fillOpacity:.95});
+    const m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:.98});
     const falta=(p.faltan||[]).join(', ');
-    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}`);
+    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,-10],className:'mk-label'});
     state.markers.addLayer(m);
+    state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});
   });
   vivos('entregas').forEach(e=>{
     if(e.lat==null||e.lng==null) return;
     const m=L.marker([e.lat,e.lng],{icon:pinIcon('#2563eb','📦')});
-    m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}`);
+    m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}<br><a href="${mapsDir(e.lat,e.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
     state.markers.addLayer(m);
+    state._mk.push({nombre:e.lugar||'Entrega',muni:e.items||'',lat:e.lat,lng:e.lng,m});
   });
   // Centros de acopio (donaciones físicas): marca morada con caja; muestra qué necesitan
   vivos('fuentes').forEach(f=>{
     if(f.tipo!=='recoleccion' || f.lat==null || f.lng==null) return;
     const nec=(f.necesita||[]).join(', ');
     const m=L.marker([f.lat,f.lng],{icon:pinIcon('#7c3aed','🏬')});
-    m.bindPopup(`<b>🏬 ${esc(f.nombre)}</b><br>Centro de acopio${f.destino?' · va a '+esc(f.destino):''}${f.direccion?'<br>📍 '+esc(f.direccion):''}${nec?'<br><b>Necesitan:</b> '+esc(nec):''}`);
+    m.bindPopup(`<b>🏬 ${esc(f.nombre)}</b><br>Centro de acopio${f.destino?' · va a '+esc(f.destino):''}${f.direccion?'<br>📍 '+esc(f.direccion):''}${nec?'<br><b>Necesitan:</b> '+esc(nec):''}<br><a href="${mapsDir(f.lat,f.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    m.bindTooltip(esc(f.nombre),{permanent:true,direction:'top',offset:[0,-30],className:'mk-label mk-label-acopio'});
     state.markers.addLayer(m);
+    state._mk.push({nombre:f.nombre,muni:f.direccion||f.destino||'Centro de acopio',lat:f.lat,lng:f.lng,m});
   });
   // La primera vez que llegan puntos, encuadra el mapa para que se VEAN (si el usuario no movió aún)
   if(!mapFitDone && !userMoved) fitToPoints();
@@ -629,6 +680,27 @@ function setPick(lat,lng,zoom){
 }
 function initPickMap(){
   const el=document.getElementById('pickmap'); if(!el||!window.L) return;
+  // Buscador de dirección/lugar: escribe y cae el pin solo (no hay que arrastrarlo a mano)
+  if(!el.parentNode.querySelector('#geo-search')){
+    const box=document.createElement('div');
+    box.id='geo-search'; box.className='geo-search';
+    box.innerHTML='<div class="geo-row"><input id="geo-q" type="search" placeholder="🔎 Escribe la dirección o el lugar (ej: KPOPAYAN, Popayán)"><button type="button" id="geo-go">Buscar</button></div><div id="geo-res" class="geo-res"></div>';
+    el.parentNode.insertBefore(box, el);
+    const q=box.querySelector('#geo-q'), go=box.querySelector('#geo-go'), res=box.querySelector('#geo-res');
+    // Si el formulario ya tiene una dirección escrita, la ofrece como búsqueda de un toque
+    const dir=document.querySelector('#modal input[name="direccion"]');
+    if(dir&&dir.value.trim()) q.value=dir.value.trim();
+    const run=async()=>{
+      const term=q.value.trim(); if(term.length<3){ res.innerHTML='<div class="geo-hint">Escribe al menos 3 letras.</div>'; return; }
+      res.innerHTML='<div class="geo-hint">Buscando…</div>';
+      const hits=await geocode(term);
+      if(!hits.length){ res.innerHTML='<div class="geo-hint">No encontré ese lugar. Prueba con la ciudad (ej: “Cra 9, Popayán”) o marca el pin a mano.</div>'; return; }
+      res.innerHTML=hits.map((h,i)=>'<button type="button" class="geo-hit" data-i="'+i+'">📍 '+esc(h.label)+'</button>').join('');
+      res.querySelectorAll('.geo-hit').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.i]; setPick(h.lat,h.lng,17); res.innerHTML='<div class="geo-hint">✓ Pin ubicado. Arrástralo si necesitas afinarlo.</div>'; });
+    };
+    go.onclick=run;
+    q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); run(); } });
+  }
   destroyPick();
   const has=gps.lat!=null;
   // Arranca donde MÁS probable estén ya cargados los tiles (los del mapa principal):

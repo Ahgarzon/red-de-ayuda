@@ -351,3 +351,38 @@ textarea{min-height:74px;resize:vertical}
 .stats-card .stat-num{font-size:clamp(26px,8vw,34px);font-weight:800;line-height:1;color:var(--accent)}
 .stats-card .stat-lab{font-size:clamp(11px,3.2vw,12.5px);color:var(--text-soft);line-height:1.2}
 .aporta-card{border-left:5px solid var(--accent)}
+
+/* ===== Buscador del mapa principal (nombre o dirección) ===== */
+.map-search{position:absolute;top:12px;left:56px;right:66px;z-index:650}
+.map-search input{width:100%;height:46px;border-radius:13px;border:1px solid var(--border);
+  background:rgba(255,255,255,.98);box-shadow:var(--shadow);padding:0 14px;font-size:15px;color:var(--text);outline:none}
+.map-res{margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:13px;
+  box-shadow:var(--shadow);overflow:hidden;max-height:52vh;overflow-y:auto;display:none}
+.map-res.on{display:block}
+.map-hit{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;
+  background:none;border:none;border-bottom:1px solid var(--border);padding:11px 13px;font-size:14.5px;color:var(--text);cursor:pointer}
+.map-hit:last-child{border-bottom:none}
+.map-hit span{color:var(--text-soft);font-size:12.5px}
+.map-hit.geo{font-weight:600;color:var(--text-soft)}
+.map-hit:active{background:var(--accent-soft)}
+.geo-hint{padding:9px 13px;color:var(--text-soft);font-size:12.5px}
+
+/* ===== Buscador de dirección dentro del formulario (geocodificar) ===== */
+.geo-search{margin:2px 0 10px}
+.geo-row{display:flex;gap:8px}
+.geo-row #geo-q{flex:1;min-width:0}
+#geo-go{flex:0 0 auto;background:var(--accent-soft);color:var(--accent);border:none;border-radius:12px;
+  padding:0 18px;font-weight:800;font-size:15px;cursor:pointer}
+.geo-res{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.geo-hit{text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;font-size:13.5px;color:var(--text);cursor:pointer;line-height:1.35}
+.geo-hit:active{background:var(--accent-soft)}
+
+/* ===== Etiqueta con el nombre sobre el marcador (para ubicarlo de un vistazo) ===== */
+.leaflet-tooltip.mk-label{background:rgba(255,255,255,.96);border:1px solid var(--border);border-radius:8px;
+  padding:2px 7px;font-weight:800;font-size:11.5px;color:var(--text);box-shadow:0 1px 5px rgba(20,22,55,.18);white-space:nowrap}
+.leaflet-tooltip.mk-label:before{display:none}
+.leaflet-tooltip.mk-label-acopio{color:#7c3aed;border-color:#cbb6f6}
+
+/* ===== "Cómo llegar" dentro de los globos del mapa ===== */
+.popup-go{display:inline-block;margin-top:7px;color:#1a73e8;font-weight:800;text-decoration:none;font-size:14px}
