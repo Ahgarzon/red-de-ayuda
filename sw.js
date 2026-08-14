@@ -1,7 +1,7 @@
-const APP='ayuda-v20';
+const APP='ayuda-v21';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
-  './','./index.html','./styles.css?v=20','./app.js?v=20','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=21','./app.js?v=21','./manifest.webmanifest',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -47,6 +47,9 @@ self.addEventListener('fetch', e=>{
 
   // Video tutorial: solo red, nunca se cachea (no inflar el almacenamiento con ~4MB)
   if(/\.mp4($|\?)/.test(url.pathname+url.search)){ return; }
+
+  // version.json: SIEMPRE red, nunca caché (es el que detecta si el celular corre código viejo)
+  if(/version\.json($|\?)/.test(url.pathname+url.search)){ return; }
 
   // Tiles del mapa: cache-first (guarda la zona ya vista para verla sin señal)
   if(/tile\.openstreetmap\.org|tile\.opentopomap\.org|basemaps\.cartocdn\.com/.test(url.hostname)){

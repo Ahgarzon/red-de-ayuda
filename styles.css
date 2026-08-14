@@ -318,3 +318,12 @@ textarea{min-height:74px;resize:vertical}
   }
   .map-legend{max-width:280px}
 }
+
+/* Indicador de conexión en vivo (mapa). Flota arriba-centro; no empuja el layout. */
+#netstatus{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:600;
+  background:#fff;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;
+  color:#334155;box-shadow:0 2px 10px rgba(0,0,0,.18);display:flex;align-items:center;gap:7px;
+  max-width:80%;white-space:nowrap;}
+#netstatus::before{content:"";width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex:0 0 auto;}
+#netstatus.on::before{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.18);}
+#netstatus.off::before{background:#dc2626;}

@@ -109,7 +109,7 @@ async function pull(table){
 }
 
 async function pullAll(){
-  setNet();
+  try{ setNet(); }catch(e){}
   const tablas = ['puntos','entregas','fuentes','aportes'];
   // Cada tabla se trae POR SEPARADO. Si una falla, NO se toca a las demás y
   // NUNCA se borra lo que ya estaba: pull() solo reemplaza cuando llega un array
@@ -117,8 +117,8 @@ async function pullAll(){
   // Esto es lo que evita que la app muestre 0 aunque los datos SÍ estén guardados.
   const res = await Promise.allSettled(tablas.map(pull));
   const ok = res.filter(r=>r.status==='fulfilled').length;
-  setNet(ok>0);           // hay señal si al menos una tabla respondió
-  renderAll();
+  try{ setNet(ok>0, vivos('puntos').length); }catch(e){}   // hay señal si al menos una tabla respondió
+  try{ renderAll(); }catch(e){ console.warn('render', e); } // que un error de pintado nunca frene la carga de datos
 }
 
 /* Escritura offline-first: intenta enviar; si falla, encola y aplica local */
@@ -197,11 +197,12 @@ function updatePending(){
 }
 
 /* ---------- estado de red ---------- */
-function setNet(ok){
+function setNet(ok, total){
   const el=$('#netstatus'), lab=$('#netlabel');
-  if(ok===undefined){ el.className='net'; lab.textContent='…'; return; }
+  if(!el || !lab) return;   // NUNCA reventar si el indicador no está en el HTML (esto rompía la lectura del servidor)
+  if(ok===undefined){ el.className='net'; lab.textContent='conectando…'; return; }
   el.className = 'net '+(ok?'on':'off');
-  lab.textContent = ok?'En línea':'Sin señal';
+  lab.textContent = ok ? ('En vivo'+(total!=null?' · '+total+' lugares':'')) : 'Sin señal';
 }
 
 /* ---------- semáforo ---------- */

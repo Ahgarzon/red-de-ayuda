@@ -2,6 +2,30 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
+<script>
+/* GUARDIÁN DE VERSIÓN (anti código-viejo). Compara la versión que corre en ESTE celular
+   contra la del servidor (version.json, siempre fresco). Si el celular quedó con una
+   versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
+   Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
+(function(){
+  var RUNNING='21';
+  try{
+    fetch('version.json?ts='+Date.now(),{cache:'no-store'})
+     .then(function(r){return r.json();})
+     .then(function(d){
+       if(!d) return;
+       if(String(d.v)===RUNNING){ try{sessionStorage.removeItem('ay_upd');}catch(e){} return; }
+       if(sessionStorage.getItem('ay_upd')) return;      // ya intentamos una vez → no hacer bucle
+       sessionStorage.setItem('ay_upd','1');
+       var fin=function(){ location.reload(); };
+       var tareas=[];
+       if('serviceWorker' in navigator){ tareas.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(x){return x.unregister();}));})); }
+       if(window.caches){ tareas.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));})); }
+       Promise.all(tareas).then(fin, fin);
+     }).catch(function(){});
+  }catch(e){}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <meta name="theme-color" content="#2b37b8" />
 <title>Ayúdame Colombia · Terremoto</title>
@@ -10,7 +34,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=20" />
+<link rel="stylesheet" href="styles.css?v=21" />
 </head>
 <body>
 <div id="app">
@@ -29,6 +53,7 @@
     <!-- MAPA -->
     <section class="screen active" id="screen-mapa">
       <div id="map"></div>
+      <div id="netstatus" class="net"><span id="netlabel">conectando…</span></div>
       <div class="map-ctrls">
         <button id="btn-locate" title="Mi ubicación">📍</button>
         <button id="btn-fitall" title="Ver todos los puntos">🗺️</button>
@@ -192,6 +217,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
