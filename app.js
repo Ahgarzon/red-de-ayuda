@@ -242,17 +242,9 @@ function renderPuntos(){
      <div class="stat g"><b>${g}</b><small>cubiertos</small></div>`;
 
   if(!list.length){ cont.innerHTML='<div class="empty">Todavía no hay lugares anotados.<br>Toca el botón verde “＋ Avisar qué falta”.</div>'; return; }
-  // ORDEN INTELIGENTE: por urgencia (rescate/vidas primero) o por cercanía a tu ubicación
-  if(ordenPuntos==='cercania' && state.myPos){
-    list.sort((x,y)=>{
-      const dx=x.lat!=null?distKm(state.myPos,[x.lat,x.lng]):1e9;
-      const dy=y.lat!=null?distKm(state.myPos,[y.lat,y.lng]):1e9;
-      return dx-dy;
-    });
-  } else {
-    list.sort((x,y)=>urgScore(y)-urgScore(x));  // mayor urgencia arriba
-  }
-  cont.innerHTML = list.map(p=>{
+
+  // dibuja una tarjeta de lugar (se reusa en los 3 modos: urgencia, cercanía y por zona)
+  const cardPunto=p=>{
     const c=color(p);
     const dist = (state.myPos && p.lat!=null) ? distKm(state.myPos,[p.lat,p.lng]) : null;
     const falta=(p.faltan||[]).map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('');
@@ -274,7 +266,43 @@ function renderPuntos(){
         :`<span class="only-owner">Solo quien avisó este lugar puede cambiarlo</span>`}
       </div>
     </div>`;
-  }).join('');
+  };
+
+  if(ordenPuntos==='zona'){
+    // POR ZONA: agrupa por Departamento → Ciudad/Municipio para deslizar y ver todo por región.
+    const SIN_D='Sin departamento', SIN_M='Sin ciudad';
+    const groups={};
+    list.forEach(p=>{
+      const d=((p.departamento||'').trim())||SIN_D;
+      const m=((p.municipio||'').trim())||SIN_M;
+      (groups[d]=groups[d]||{}); (groups[d][m]=groups[d][m]||[]).push(p);
+    });
+    const cmp=(a,b)=>{ if(a===SIN_D||a===SIN_M)return 1; if(b===SIN_D||b===SIN_M)return -1; return a.localeCompare(b,'es'); };
+    const deptos=Object.keys(groups).sort(cmp);
+    cont.innerHTML = deptos.map(d=>{
+      const munis=groups[d];
+      const todos=Object.keys(munis).reduce((a,m)=>a.concat(munis[m]),[]);
+      const need=todos.filter(p=>color(p)==='rojo'||color(p)==='rescate').length;
+      const muniNames=Object.keys(munis).sort(cmp);
+      return `<div class="zona-depto">
+        <div class="zona-h">📍 ${esc(d)}<span class="zona-count">${todos.length} lugar${todos.length!==1?'es':''}${need?' · '+need+' necesita'+(need!==1?'n':''):''}</span></div>
+        ${muniNames.map(m=>`<div class="zona-muni">${esc(m)}</div>`+
+          munis[m].sort((x,y)=>urgScore(y)-urgScore(x)).map(cardPunto).join('')).join('')}
+      </div>`;
+    }).join('');
+  } else {
+    // ORDEN INTELIGENTE: por urgencia (rescate/vidas primero) o por cercanía a tu ubicación
+    if(ordenPuntos==='cercania' && state.myPos){
+      list.sort((x,y)=>{
+        const dx=x.lat!=null?distKm(state.myPos,[x.lat,x.lng]):1e9;
+        const dy=y.lat!=null?distKm(state.myPos,[y.lat,y.lng]):1e9;
+        return dx-dy;
+      });
+    } else {
+      list.sort((x,y)=>urgScore(y)-urgScore(x));  // mayor urgencia arriba
+    }
+    cont.innerHTML = list.map(cardPunto).join('');
+  }
   cont.querySelectorAll('[data-cubierto]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.cubierto,{estado:'cubierto'}));
   cont.querySelectorAll('[data-reabrir]').forEach(b=>b.onclick=()=>update('puntos',b.dataset.reabrir,{estado:'activo'}));
   cont.querySelectorAll('[data-editp]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.editp);if(p)openForm('punto',p,p.id);});

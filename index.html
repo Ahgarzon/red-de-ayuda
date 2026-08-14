@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=14" />
+<link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
 <div id="app">
@@ -50,8 +50,9 @@
         <p class="sub">Dónde falta ayuda y dónde ya sobra. Lo rojo es lo que está más solo.</p>
       </div>
       <div class="seg" id="orden-puntos">
-        <button class="seg-btn active" data-orden="urgencia">🚨 Por urgencia</button>
-        <button class="seg-btn" data-orden="cercania">📍 Cerca de mí</button>
+        <button class="seg-btn active" data-orden="urgencia">🚨 Urgencia</button>
+        <button class="seg-btn" data-orden="cercania">📍 Cerca</button>
+        <button class="seg-btn" data-orden="zona">🗺️ Por zona</button>
       </div>
       <div class="filters" id="filtros-depto"></div>
       <div class="resumen" id="resumen-balance"></div>
@@ -176,6 +177,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

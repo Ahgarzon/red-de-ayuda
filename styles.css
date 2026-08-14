@@ -152,13 +152,13 @@ body{
 /* TABBAR — pegada al borde inferior; la zona del gesto del teléfono toma su mismo
    color (no queda franja blanca): el padding inferior es la safe-area y comparte fondo. */
 .tabbar{
-  display:flex;background:var(--surface);border-top:1px solid var(--border);flex:none;
-  /* pega la barra al borde: solo lo justo para librar el gesto del iPhone, sin franja blanca de más */
-  padding-bottom:max(6px, calc(var(--safe-bot) - 12px))
+  display:flex;align-items:flex-end;background:var(--surface);border-top:1px solid var(--border);flex:none;
+  /* íconos pegados abajo: solo un colchón mínimo para no chocar con la rayita del gesto del iPhone */
+  padding-bottom:max(3px, calc(var(--safe-bot) - 20px))
 }
 .tab{
-  flex:1;background:none;border:none;padding:7px 2px 5px;color:var(--text-soft);
-  font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px
+  flex:1;background:none;border:none;padding:6px 2px 2px;color:var(--text-soft);
+  font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px
 }
 .tab .ti{display:block;height:25px}
 .tab .ti svg{width:25px;height:25px;display:block}
@@ -246,3 +246,17 @@ textarea{min-height:74px;resize:vertical}
 /* centro de acopio (donaciones físicas) */
 .card.acopio{border-left:5px solid #7c3aed}
 .badge.acopio{background:#efe7ff;color:#6d28d9}
+
+/* ===== v15: vista POR ZONA (departamentos y ciudades) ===== */
+.zona-depto{margin-bottom:6px}
+.zona-h{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--header);color:#fff;border-radius:14px;
+  padding:13px 16px;margin:14px 0 4px;font-size:18px;font-weight:800;box-shadow:var(--shadow)
+}
+.zona-h .zona-count{font-size:13px;font-weight:700;opacity:.9;margin-left:auto}
+.zona-muni{
+  font-size:15px;font-weight:800;color:var(--text-soft);
+  padding:10px 4px 2px;letter-spacing:.01em;display:flex;align-items:center;gap:7px
+}
+.zona-muni::before{content:"🏘️";font-size:15px}
