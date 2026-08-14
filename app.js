@@ -41,6 +41,11 @@ const isAdmin = ()=> !!cache('ay_admin');
 /* ¿Este reporte lo puedo tocar? Sí si es mío, si soy operador, o si es un registro
    viejo que aún no tiene dueño (para no congelar lo creado antes de esta versión). */
 function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
+/* ¿este reporte lo creó ESTE mismo dispositivo? → se muestra de PRIMERO y con distintivo,
+   para que quien lo creó lo encuentre al instante y pueda actualizar su estado. */
+function esMio(rec){ return !!(rec && rec.owner && rec.owner===ME); }
+/* comparador reusable: lo mío arriba (para ordenar cada lista con lo propio de primero) */
+function mioFirst(a,b){ return (esMio(b)?1:0)-(esMio(a)?1:0); }
 /* registros visibles = los NO archivados (nada se borra de la base; solo se oculta) */
 function vivos(table){ return (state[table]||[]).filter(r=>!r.archivado); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'),2600); }
@@ -296,12 +301,14 @@ function renderPuntos(){
     const sobra=(p.sobran||[]).map(t=>`<span class="tag sobra">+ ${esc(t)}</span>`).join('');
     return `<div class="card ${c}">
       <span class="badge ${c==='ambar'?'rojo':c}">${LABELS[c]}</span>
+      ${esMio(p)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       ${p.urgencia&&p.urgencia!=='normal'?`<span class="badge urg">${URG_LABEL[p.urgencia]}</span>`:''}
       <h3>${esc(p.nombre)}${p._pending?' ⏳':''}</h3>
       <div class="meta">${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} personas${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
       ${p.necesita_rescate?'<div class="tag falta" style="display:inline-block">🚨 Faltan rescatistas</div>':''}
       <div class="tags">${falta}${sobra||(!falta?'<span class="tag plain">sin detalle</span>':'')}</div>
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
+      ${fotoSlot('puntos',p.id,p.foto,p.tiene_foto)}
       <div class="card-actions">
         <button class="btn-mini acc" data-vermapa="${p.id}">📍 Ver en el mapa</button>
         ${mine(p)?`
@@ -332,19 +339,20 @@ function renderPuntos(){
       return `<div class="zona-depto">
         <div class="zona-h">📍 ${esc(d)}<span class="zona-count">${todos.length} lugar${todos.length!==1?'es':''}${need?' · '+need+' necesita'+(need!==1?'n':''):''}</span></div>
         ${muniNames.map(m=>`<div class="zona-muni">${esc(m)}</div>`+
-          munis[m].sort((x,y)=>urgScore(y)-urgScore(x)).map(cardPunto).join('')).join('')}
+          munis[m].sort((x,y)=>mioFirst(x,y)||urgScore(y)-urgScore(x)).map(cardPunto).join('')).join('')}
       </div>`;
     }).join('');
   } else {
     // ORDEN INTELIGENTE: por urgencia (rescate/vidas primero) o por cercanía a tu ubicación
     if(ordenPuntos==='cercania' && state.myPos){
       list.sort((x,y)=>{
+        const m=mioFirst(x,y); if(m) return m;      // lo tuyo de primero
         const dx=x.lat!=null?distKm(state.myPos,[x.lat,x.lng]):1e9;
         const dy=y.lat!=null?distKm(state.myPos,[y.lat,y.lng]):1e9;
         return dx-dy;
       });
     } else {
-      list.sort((x,y)=>urgScore(y)-urgScore(x));  // mayor urgencia arriba
+      list.sort((x,y)=>mioFirst(x,y)||urgScore(y)-urgScore(x));  // lo tuyo, luego mayor urgencia
     }
     cont.innerHTML = list.map(cardPunto).join('');
   }
@@ -353,13 +361,15 @@ function renderPuntos(){
   cont.querySelectorAll('[data-editp]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.editp);if(p)openForm('punto',p,p.id);});
   cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Ocultar este lugar?','Se quita de la lista y del mapa, pero queda guardado (no se pierde). Se puede recuperar.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
+  wireFotos(cont);
 }
 
 /* Foto/comprobante: el listado ya NO trae las fotos base64 (eran enormes y tumbaban
    la carga). Se muestran bajo demanda: al tocar "Ver foto" se pide esa sola imagen. */
-function fotoSlot(table,id,inline){
+function fotoSlot(table,id,inline,has){
   const src = inline || state.fotos[id];
-  if(src) return `<img class="card-photo" src="${src}" alt="">`;
+  if(src) return `<img class="card-photo" src="${src}" alt="" loading="lazy">`;
+  if(!has) return '';                               // sin foto → no mostramos nada (limpio)
   const lbl = table==='aportes' ? '📷 Ver comprobante' : '📷 Ver foto';
   return `<div class="foto-slot"><button class="btn-mini" data-verfoto="${table}:${id}">${lbl}</button></div>`;
 }
@@ -381,12 +391,14 @@ function renderEntregas(){
   const cont=$('#lista-entregas');
   const entregas=vivos('entregas');
   if(!entregas.length){ cont.innerHTML='<div class="empty">Todavía no hay entregas anotadas.<br>Toca el botón verde “＋ Anotar una entrega”.</div>'; return; }
+  entregas.sort((a,b)=>mioFirst(a,b)||(new Date(b.created_at)-new Date(a.created_at)));  // lo tuyo arriba, luego lo más nuevo
   cont.innerHTML = entregas.map(e=>`
     <div class="card ${e.recibido?'verde':'ambar'}">
       <span class="badge ${e.recibido?'verde':'rojo'}">${e.recibido?'Recibido':'En camino'}</span>
+      ${esMio(e)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       <h3>${esc(e.lugar||'Entrega')}${e._pending?' ⏳':''}</h3>
       <div class="meta">${esc(e.quien_entrego||'—')} · ${new Date(e.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
-      ${fotoSlot('entregas',e.id,e.foto)}
+      ${fotoSlot('entregas',e.id,e.foto,e.tiene_foto)}
       <div class="tags"><span class="tag plain">${esc(e.items||'ayuda')}</span></div>
       ${e.recibido&&e.recibido_por?`<div class="meta" style="margin-top:8px">Recibido por: ${esc(e.recibido_por)}</div>`:''}
       <div class="card-actions">
@@ -410,8 +422,8 @@ function renderFuentes(){
   const cont=$('#lista-fuentes');
   const fuentes=vivos('fuentes');
   if(!fuentes.length){ cont.innerHTML='<div class="empty">Todavía no hay cuentas ni puntos.<br>Toca “＋ Agregar una cuenta” para empezar.</div>'; return; }
-  // acopios (donar cosas) primero, luego cuentas
-  fuentes.sort((a,b)=>(a.tipo==='recoleccion'?0:1)-(b.tipo==='recoleccion'?0:1));
+  // lo tuyo de primero; luego acopios (donar cosas) y por último las cuentas
+  fuentes.sort((a,b)=>mioFirst(a,b)||((a.tipo==='recoleccion'?0:1)-(b.tipo==='recoleccion'?0:1)));
   cont.innerHTML = fuentes.map(f=>{
     const aportes=vivos('aportes').filter(a=>a.fuente_id===f.id);
     const conf=aportes.filter(a=>a.estado==='confirmado').length;
@@ -420,6 +432,7 @@ function renderFuentes(){
     const dist=(state.myPos&&f.lat!=null)?distKm(state.myPos,[f.lat,f.lng]):null;
     return `<div class="card ${acopio?'acopio':(f.verificada?'verde':'')}">
       <span class="badge ${acopio?'acopio':(f.verificada?'verde':'rojo')}">${acopio?'🏬 Centro de acopio':(f.verificada?'Verificada':'Sin verificar')}</span>
+      ${esMio(f)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       <h3>${esc(f.nombre)}${f._pending?' ⏳':''}</h3>
       <div class="meta">${acopio?'Donar cosas (ropa, comida, colchones…)':'🏦 Cuenta bancaria'}${f.destino?' · 🚚 va a '+esc(f.destino):''}${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
       ${acopio&&nec.length?`<div class="tags" style="margin-top:8px"><b style="font-size:.92em;color:#7c3aed;margin-right:4px">Necesitan:</b>${nec.map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('')}</div>`:''}
@@ -449,13 +462,15 @@ function renderAportes(){
   const cont=$('#lista-aportes');
   const aportes=vivos('aportes');
   if(!aportes.length){ cont.innerHTML='<div class="empty">Todavía no hay donaciones anotadas.</div>'; return; }
+  aportes.sort((a,b)=>mioFirst(a,b)||(new Date(b.created_at)-new Date(a.created_at)));  // lo tuyo arriba, luego lo más nuevo
   cont.innerHTML = aportes.map(a=>{
     const f=state.fuentes.find(x=>x.id===a.fuente_id);
     return `<div class="card ${a.estado==='confirmado'?'verde':'ambar'}">
       <span class="badge ${a.estado==='confirmado'?'verde':'rojo'}">${a.estado==='confirmado'?'Confirmado ✓':'Reportado'}</span>
+      ${esMio(a)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       <h3>$ ${esc(a.monto||'—')}${a._pending?' ⏳':''}</h3>
       <div class="meta">${esc(a.quien||'Anónimo')}${f?' → '+esc(f.nombre):''} · ${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</div>
-      ${fotoSlot('aportes',a.id,a.comprobante)}
+      ${fotoSlot('aportes',a.id,a.comprobante,a.tiene_foto)}
       <div class="card-actions">
         ${mine(a)&&a.estado!=='confirmado'?`<button class="btn-mini ok" data-confirmar="${a.id}">✔ El dinero llegó</button>`:''}
       </div>
@@ -634,6 +649,9 @@ function openForm(kind, prefill={}, editId=null){
       <label>¿Qué SOBRA / ya llegó?</label>${multi('sobran',P.sobran)}
       <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px" ${P.necesita_rescate?'checked':''}>🚨 Faltan rescatistas / gente atrapada</label>
       <label>Nota (opcional)</label><textarea name="nota" placeholder="Detalles: qué se necesita con urgencia, cómo llegar…">${esc(P.nota||'')}</textarea>
+      <label>Foto del lugar (opcional)</label>
+      <input type="file" accept="image/*" capture="environment" id="foto"><img class="photo-prev" id="prev">
+      ${editId&&P.tiene_foto?'<div class="help">Ya tiene una foto. Sube otra solo si quieres cambiarla.</div>':''}
       <label>¿Dónde queda? Ubícalo en el mapa</label>
       <div id="pickmap"></div>
       <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el punto en cualquier lugar. O usa tu GPS.</div>
@@ -776,11 +794,11 @@ function submitForm(kind){
       personas: parseInt(g('personas'))||0, urgencia:g('urgencia')||'normal',
       faltan:readMulti('faltan'), sobran:readMulti('sobran'),
       necesita_rescate: !!fd.get('necesita_rescate'), nota:g('nota'), creado_por: cache(LS.user)||'',
-      lat:gps.lat, lng:gps.lng, estado:'activo' };
+      lat:gps.lat, lng:gps.lng, estado:'activo', foto:currentPhoto||null, tiene_foto: !!currentPhoto };
   } else if(kind==='entrega'){
     if(!g('lugar')) return toast('Falta el lugar');
     table='entregas';
-    data={ lugar:g('lugar'), quien_entrego:g('quien_entrego'), items:g('items'), foto:currentPhoto||null, lat:gps.lat, lng:gps.lng, recibido:false };
+    data={ lugar:g('lugar'), quien_entrego:g('quien_entrego'), items:g('items'), foto:currentPhoto||null, tiene_foto: !!currentPhoto, lat:gps.lat, lng:gps.lng, recibido:false };
   } else if(kind==='fuente'){
     if(!g('nombre')) return toast('Falta el nombre');
     table='fuentes';
@@ -791,12 +809,13 @@ function submitForm(kind){
       lat: esAcopio?gps.lat:null, lng: esAcopio?gps.lng:null };
   } else if(kind==='aporte'){
     table='aportes';
-    data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, estado:'reportado' };
+    data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, tiene_foto: !!currentPhoto, estado:'reportado' };
   }
   const afterDonar=()=>{ if(table==='fuentes'||table==='aportes'){ segDonar= table==='aportes'?'aportes':'fuentes'; syncSeg(); } };
   if(editingKind===kind && editingId){
     const eid=editingId; editingId=null; editingKind=null;
     delete data.creado_por; delete data.estado;   // no reescribir dueño/estado al editar
+    if(!currentPhoto){ delete data.foto; delete data.tiene_foto; }  // sin foto nueva → conservar la que ya tenía
     closeModal();
     update(table, eid, data).then(()=>{ afterDonar(); toast('Cambios guardados'); });
     return;
