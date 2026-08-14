@@ -77,8 +77,9 @@ function distKm(a,b){
   return 2*R*Math.asin(Math.sqrt(x));
 }
 function fmtKm(d){ if(d==null) return ''; return d<1 ? Math.round(d*1000)+' m' : (d<10?d.toFixed(1):Math.round(d))+' km'; }
-/* Link a Google Maps con NAVEGACIÓN (Cómo llegar) hasta un punto exacto. Abre la app de mapas del celular. */
-function mapsDir(lat,lng){ return 'https://www.google.com/maps/dir/?api=1&destination='+(+lat)+','+(+lng); }
+/* Link a Google Maps con NAVEGACIÓN (Cómo llegar) hasta un punto exacto. Abre la app de mapas del celular.
+   travelmode=driving evita el "no hay ruta a pie" en distancias largas (ej. Popayán→Chocó). */
+function mapsDir(lat,lng){ return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+(+lat)+','+(+lng); }
 /* Geocodificar: convierte una dirección o nombre escrito en coordenadas (OSM Nominatim, gratis, con CORS).
    Sirve para ubicar un lugar SIN arrastrar el pin a mano — escribes "KPOPAYAN, Popayán" y cae el pin ahí. */
 async function geocode(q){
