@@ -1,4 +1,4 @@
-const APP='ayuda-v31';
+const APP='ayuda-v32';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
   './','./index.html','./styles.css?v=31','./app.js?v=31','./manifest.webmanifest',

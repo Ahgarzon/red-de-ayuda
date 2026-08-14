@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='31';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var RUNNING='32';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
   var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
@@ -77,7 +77,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=31" />
+<link rel="stylesheet" href="styles.css?v=32" />
 </head>
 <body>
 <div id="app">
@@ -127,6 +127,7 @@
         <button class="seg-btn" data-orden="zona">🗺️ Por zona</button>
       </div>
       <div class="filters" id="filtros-depto"></div>
+      <div class="near-note hidden" id="near-note"></div>
       <div class="resumen" id="resumen-balance"></div>
       <div class="list" id="lista-puntos"></div>
       <div class="addbar"><button class="fab-full" data-add="punto">＋ Avisar qué falta</button></div>
@@ -154,7 +155,7 @@
       </div>
       <div class="list" id="lista-fuentes"></div>
       <div class="list hidden" id="lista-aportes"></div>
-      <div class="addbar"><button class="fab-full" data-add="fuente">＋ Agregar acopio o cuenta</button></div>
+      <div class="addbar"><button class="fab-full" id="fab-donar" data-add="fuente">＋ Agregar acopio o cuenta</button></div>
     </section>
 
     <!-- INFO -->
@@ -276,6 +277,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ const LS = {
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, fotos:{}, _mk:[] };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[] };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -342,6 +342,26 @@ function renderPuntos(){
      <div class="stat a"><b>${a}</b><small>parciales</small></div>
      <div class="stat g"><b>${g}</b><small>cubiertos</small></div>`;
 
+  // Aviso del modo "Cerca": deja CLARO dónde te ubica la app y que ordena por distancia real a ti
+  // (así no parece que "te pone en Valle del Cauca" cuando en realidad solo no hay puntos cerca).
+  const nn=$('#near-note');
+  if(nn){
+    if(ordenPuntos==='cercania'){
+      nn.classList.remove('hidden');
+      if(!state.myPos){
+        nn.innerHTML='📍 Buscando tu ubicación… permite el GPS para ordenar por lo más cercano a ti.';
+      } else {
+        const dists=list.filter(p=>p.lat!=null).map(p=>distKm(state.myPos,[p.lat,p.lng]));
+        const min=dists.length?Math.min(...dists):null;
+        const donde=state.myPlace?('Estás en <b>'+esc(state.myPlace)+'</b>'):'Usando tu ubicación actual';
+        nn.innerHTML='📍 '+donde+' · ordenado por lo más cercano a ti'+
+          (min!=null?(min>60?'. No hay puntos muy cerca; el más cercano está <b>a '+fmtKm(min)+'</b>.':'. El más cercano está <b>a '+fmtKm(min)+'</b>.'):'.');
+      }
+    } else {
+      nn.classList.add('hidden');
+    }
+  }
+
   if(!list.length){ cont.innerHTML='<div class="empty">Todavía no hay lugares anotados.<br>Toca el botón verde “＋ Avisar qué falta”.</div>'; return; }
 
   // dibuja una tarjeta de lugar (se reusa en los 3 modos: urgencia, cercanía y por zona)
@@ -606,17 +626,34 @@ function initMapSearch(){
   q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); clearTimeout(t); run(); } });
 }
 function locateMe(center){
-  if(!navigator.geolocation || !state.map) return;
+  // IMPORTANTE: pedir el GPS NO depende de que el mapa esté abierto. Antes, si el usuario iba directo a
+  // Lugares → "Cerca" sin abrir el Mapa, esto retornaba y nunca tomaba su ubicación → el orden por cercanía
+  // no funcionaba. Ahora tomamos la ubicación siempre; el marcador azul se dibuja solo si el mapa existe.
+  if(!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(p=>{
     state.myPos=[p.coords.latitude,p.coords.longitude];
     if(ordenPuntos==='cercania') renderPuntos();
-    if(!state.map) return;
-    const ll=[p.coords.latitude,p.coords.longitude];
-    if(meMarker) state.map.removeLayer(meMarker);
-    meMarker=L.circleMarker(ll,{radius:8,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(state.map);
-    meMarker.bindPopup('Estás aquí');
-    if(center){ userMoved=true; state.map.setView(ll,14); }
-  }, ()=>{ if(center) toast('No se pudo obtener tu ubicación (permite el GPS)'); }, {enableHighAccuracy:true,timeout:8000});
+    reverseGeo(state.myPos);            // averigua ciudad/departamento para el aviso de "Cerca"
+    if(state.map){
+      const ll=[p.coords.latitude,p.coords.longitude];
+      if(meMarker) state.map.removeLayer(meMarker);
+      meMarker=L.circleMarker(ll,{radius:8,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(state.map);
+      meMarker.bindPopup('Estás aquí');
+      if(center){ userMoved=true; state.map.setView(ll,14); }
+    }
+  }, ()=>{ if(center) toast('No se pudo obtener tu ubicación (permite el GPS)'); }, {enableHighAccuracy:true,timeout:8000,maximumAge:60000});
+}
+/* Reverse geocode: nombre legible (ciudad, departamento) de donde está el usuario, para el aviso de "Cerca". */
+async function reverseGeo(ll){
+  if(!ll) return;
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=es&zoom=10&lat='+ll[0]+'&lon='+ll[1],{headers:{'Accept':'application/json'}});
+    const j=await r.json(); const a=j.address||{};
+    const city=a.city||a.town||a.village||a.municipality||a.county||'';
+    const dep=a.state||'';
+    const label=[city,dep].filter(Boolean).join(', ');
+    if(label){ state.myPlace=label; if(ordenPuntos==='cercania') renderPuntos(); }
+  }catch(e){}
 }
 function fitToPoints(){
   if(!state.map) return;
@@ -825,14 +862,22 @@ function openForm(kind, prefill={}, editId=null){
       <label>Nota</label><textarea name="nota" placeholder="Qué se recibe, horarios…">${esc(P.nota||'')}</textarea>
       <button class="btn-primary" type="submit">Guardar</button>`;
   } else if(kind==='aporte'){
-    title.textContent='Anotar una donación';
+    title.textContent='Anotar una donación de dinero';
+    // deja elegir a qué cuenta/campaña donó (así se puede anotar desde el botón grande, sin partir de una cuenta)
+    const cuentas=vivos('fuentes').filter(x=>x.tipo!=='recoleccion');
+    const opts=cuentas.map(c=>`<option value="${esc(c.id)}" ${String(prefill.fuente_id||'')===String(c.id)?'selected':''}>${esc(c.nombre)}${c.titular?' — '+esc(c.titular):''}</option>`).join('');
     f.innerHTML=`
-      <input type="hidden" name="fuente_id" value="${esc(prefill.fuente_id||'')}">
+      <label>¿A qué cuenta o campaña donaste?</label>
+      <select name="fuente_id">
+        <option value="">— Otra / no está en la lista —</option>
+        ${opts}
+      </select>
+      ${cuentas.length?'':'<div class="help">Aún no hay cuentas cargadas. Puedes anotar igual tu donación; si quieres, agrega la cuenta con “＋ Agregar acopio o cuenta”.</div>'}
       <label>¿Quién aporta?</label><input name="quien" placeholder="Tu nombre (o anónimo)">
       <label>Monto</label><input name="monto" inputmode="decimal" placeholder="Ej: 50000">
       <label>Foto del comprobante</label>
       <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
-      <div class="help">Queda como prueba. Se marca “confirmado” cuando se verifica que llegó.</div>
+      <div class="help">Anota una donación que ya hiciste. Queda como prueba; se marca “confirmado” cuando se verifica que llegó.</div>
       <button class="btn-primary" type="submit">Guardar donación</button>`;
   }
   // multi toggles
@@ -958,6 +1003,12 @@ function syncSeg(){
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.seg===segDonar));
   $('#lista-fuentes').classList.toggle('hidden', segDonar!=='fuentes');
   $('#lista-aportes').classList.toggle('hidden', segDonar!=='aportes');
+  // el botón grande cambia según la pestaña: en "Donaciones de dinero" sirve para ANOTAR una donación hecha
+  const fab=$('#fab-donar');
+  if(fab){
+    if(segDonar==='aportes'){ fab.dataset.add='aporte'; fab.textContent='＋ Anoté una donación de dinero'; }
+    else { fab.dataset.add='fuente'; fab.textContent='＋ Agregar acopio o cuenta'; }
+  }
 }
 
 /* ================= INIT ================= */

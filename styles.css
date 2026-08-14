@@ -233,6 +233,8 @@ input,select,textarea{
 textarea{min-height:74px;resize:vertical}
 .row2{display:flex;gap:10px}.row2>div{flex:1}
 .help{font-size:14px;color:var(--text-soft);margin-top:5px;line-height:1.45}
+.near-note{font-size:14px;color:var(--text-soft);line-height:1.45;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin:0 0 12px}
+.near-note.hidden{display:none}
 .btn-primary{width:100%;background:var(--accent);color:#fff;border:none;border-radius:14px;padding:17px;font-size:17.5px;font-weight:800;margin-top:18px}
 .btn-primary:active{transform:scale(.99)}
 .gps-btn{background:var(--accent-soft);color:var(--accent);border:none;border-radius:12px;padding:14px;font-weight:800;width:100%;margin-top:8px;font-size:15.5px}
