@@ -853,6 +853,15 @@ function boot(){
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && navigator.onLine){ flush(); pullAll(); } });
   window.addEventListener('focus', ()=>{ if(navigator.onLine){ pullAll(); } });
 
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    // Respaldo de auto-sanación: si el service worker nuevo toma el control (o avisa que
+    // se actualizó) y esta pestaña sigue con código viejo, se recarga UNA vez a la versión
+    // fresca. Guardado con bandera para que NUNCA entre en bucle de recargas.
+    let _recargando=false;
+    const _recargarUnaVez=()=>{ if(_recargando) return; _recargando=true; location.reload(); };
+    navigator.serviceWorker.addEventListener('controllerchange', _recargarUnaVez);
+    navigator.serviceWorker.addEventListener('message', e=>{ if(e.data&&e.data.type==='sw-updated') _recargarUnaVez(); });
+  }
 }
 document.addEventListener('DOMContentLoaded', boot);

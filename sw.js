@@ -1,7 +1,7 @@
-const APP='ayuda-v19';
+const APP='ayuda-v20';
 const TILES='ayuda-tiles-v3';
 const SHELL=[
-  './','./index.html','./styles.css?v=19','./app.js?v=19','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=20','./app.js?v=20','./manifest.webmanifest',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -12,8 +12,22 @@ self.addEventListener('install', e=>{
   self.skipWaiting();
 });
 self.addEventListener('activate', e=>{
-  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==APP&&k!==TILES).map(k=>caches.delete(k)))));
-  self.clients.claim();
+  e.waitUntil((async()=>{
+    // borra los cachés de versiones anteriores
+    const ks = await caches.keys();
+    await Promise.all(ks.filter(k=>k!==APP&&k!==TILES).map(k=>caches.delete(k)));
+    await self.clients.claim();
+    /* AUTO-SANACIÓN (lo que evita que un celular se quede para SIEMPRE con la app vieja/vacía):
+       cuando se activa una versión NUEVA del service worker, se recarga UNA sola vez cada
+       pestaña abierta para que tome el código fresco de la red. Así, un celular que había
+       abierto una versión anterior (Service Worker cache-first) NO necesita que el usuario
+       cierre y reabra: se arregla solo. Solo pasa al cambiar de versión (una vez por versión),
+       así que NO hay bucle de recargas. */
+    const clientes = await self.clients.matchAll({type:'window'});
+    for(const c of clientes){
+      try{ await c.navigate(c.url); }catch(err){ try{ c.postMessage({type:'sw-updated'}); }catch(e2){} }
+    }
+  })());
 });
 
 /* ¿Es el "cascarón" de la app (HTML/JS/CSS/manifest)? Ese SIEMPRE se busca fresco en
