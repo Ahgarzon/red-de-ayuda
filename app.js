@@ -265,8 +265,15 @@ function renderPuntos(){
   const puntos=vivos('puntos');
   const deptos=[...new Set(puntos.map(p=>p.departamento).filter(Boolean))].sort();
   const fc=$('#filtros-depto');
-  fc.innerHTML = ['__all',...deptos].map(d=>`<button class="chip ${filtroDepto===d?'active':''}" data-depto="${esc(d)}">${d==='__all'?'Todos':esc(d)}</button>`).join('');
-  fc.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{filtroDepto=b.dataset.depto;renderPuntos();});
+  // el filtro por departamento solo tiene sentido (y solo se muestra) en modo "Por zona"
+  const verFiltros = ordenPuntos==='zona';
+  fc.style.display = verFiltros ? 'flex' : 'none';
+  if(verFiltros){
+    fc.innerHTML = ['__all',...deptos].map(d=>`<button class="chip ${filtroDepto===d?'active':''}" data-depto="${esc(d)}">${d==='__all'?'Todos':esc(d)}</button>`).join('');
+    fc.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{filtroDepto=b.dataset.depto;renderPuntos();});
+  } else {
+    filtroDepto='__all';   // sin filtro fuera de "Por zona"
+  }
 
   let list = puntos.slice();
   if(filtroDepto!=='__all') list=list.filter(p=>p.departamento===filtroDepto);

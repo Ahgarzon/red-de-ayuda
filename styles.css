@@ -107,6 +107,8 @@ body{
    NUNCA tapa las tarjetas (antes el botón flotante se montaba encima de la info). */
 .screen.haslist{display:none;flex-direction:column;overflow:hidden;padding-bottom:0}
 .screen.haslist.active{display:flex}
+/* las filas de arriba NUNCA se encogen (así no se cortan los botones en pantallas cortas); solo scrollea .list */
+.screen.haslist>.head,.screen.haslist>.seg,.screen.haslist>.filters,.screen.haslist>.resumen{flex:none}
 .screen.haslist .list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:14px}
 .addbar{flex:none;background:var(--surface);border-top:1px solid var(--border);
   padding:10px 16px calc(10px + max(0px, calc(var(--safe-bot) - 18px)))}
