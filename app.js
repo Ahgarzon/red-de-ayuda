@@ -7,7 +7,7 @@ const LS = {
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -44,6 +44,28 @@ function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
 function vivos(table){ return (state[table]||[]).filter(r=>!r.archivado); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'),2600); }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* distancia en km entre dos coordenadas (haversine) — para ordenar por cercanía */
+function distKm(a,b){
+  if(!a||!b) return null;
+  const R=6371, dLa=(b[0]-a[0])*Math.PI/180, dLo=(b[1]-a[1])*Math.PI/180;
+  const la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
+  const x=Math.sin(dLa/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function fmtKm(d){ if(d==null) return ''; return d<1 ? Math.round(d*1000)+' m' : (d<10?d.toFixed(1):Math.round(d))+' km'; }
+/* puntaje de URGENCIA: rescate y vidas primero, luego criticidad, semáforo, faltantes y gente */
+function urgScore(p){
+  let s=0;
+  if(p.necesita_rescate) s+=1000;
+  if(p.urgencia==='critica') s+=400; else if(p.urgencia==='alta') s+=200;
+  const c=color(p);
+  if(c==='rojo') s+=100; else if(c==='ambar') s+=40;
+  s+=Math.min((p.faltan||[]).length*12, 72);
+  s+=Math.min((p.personas||0),300)/10;
+  return s;
+}
+const URG_LABEL={critica:'🔴 Crítico',alta:'🟠 Urgente',normal:'Normal'};
 
 /* ---------- backend ---------- */
 async function api(action, table, extra={}){
@@ -199,6 +221,7 @@ function askConfirm(title, msg, cb){
 function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); updatePending(); }
 
 let filtroDepto='__all';
+let ordenPuntos='urgencia';   // 'urgencia' | 'cercania'
 function renderPuntos(){
   const cont=$('#lista-puntos');
   const puntos=vivos('puntos');
@@ -219,17 +242,26 @@ function renderPuntos(){
      <div class="stat g"><b>${g}</b><small>cubiertos</small></div>`;
 
   if(!list.length){ cont.innerHTML='<div class="empty">Todavía no hay lugares anotados.<br>Toca el botón verde “＋ Avisar qué falta”.</div>'; return; }
-  // rojos primero
-  const ord={rescate:0,rojo:1,ambar:2,verde:3};
-  list.sort((x,y)=>ord[color(x)]-ord[color(y)]);
+  // ORDEN INTELIGENTE: por urgencia (rescate/vidas primero) o por cercanía a tu ubicación
+  if(ordenPuntos==='cercania' && state.myPos){
+    list.sort((x,y)=>{
+      const dx=x.lat!=null?distKm(state.myPos,[x.lat,x.lng]):1e9;
+      const dy=y.lat!=null?distKm(state.myPos,[y.lat,y.lng]):1e9;
+      return dx-dy;
+    });
+  } else {
+    list.sort((x,y)=>urgScore(y)-urgScore(x));  // mayor urgencia arriba
+  }
   cont.innerHTML = list.map(p=>{
     const c=color(p);
+    const dist = (state.myPos && p.lat!=null) ? distKm(state.myPos,[p.lat,p.lng]) : null;
     const falta=(p.faltan||[]).map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('');
     const sobra=(p.sobran||[]).map(t=>`<span class="tag sobra">+ ${esc(t)}</span>`).join('');
     return `<div class="card ${c}">
       <span class="badge ${c==='ambar'?'rojo':c}">${LABELS[c]}</span>
+      ${p.urgencia&&p.urgencia!=='normal'?`<span class="badge urg">${URG_LABEL[p.urgencia]}</span>`:''}
       <h3>${esc(p.nombre)}${p._pending?' ⏳':''}</h3>
-      <div class="meta">${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} personas</div>
+      <div class="meta">${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} personas${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
       ${p.necesita_rescate?'<div class="tag falta" style="display:inline-block">🚨 Faltan rescatistas</div>':''}
       <div class="tags">${falta}${sobra||(!falta?'<span class="tag plain">sin detalle</span>':'')}</div>
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
@@ -282,24 +314,35 @@ function renderFuentes(){
   const cont=$('#lista-fuentes');
   const fuentes=vivos('fuentes');
   if(!fuentes.length){ cont.innerHTML='<div class="empty">Todavía no hay cuentas ni puntos.<br>Toca “＋ Agregar una cuenta” para empezar.</div>'; return; }
+  // acopios (donar cosas) primero, luego cuentas
+  fuentes.sort((a,b)=>(a.tipo==='recoleccion'?0:1)-(b.tipo==='recoleccion'?0:1));
   cont.innerHTML = fuentes.map(f=>{
     const aportes=vivos('aportes').filter(a=>a.fuente_id===f.id);
     const conf=aportes.filter(a=>a.estado==='confirmado').length;
-    return `<div class="card ${f.verificada?'verde':''}">
-      <span class="badge ${f.verificada?'verde':'rojo'}">${f.verificada?'Verificada':'Sin verificar'}</span>
+    const acopio=f.tipo==='recoleccion';
+    const nec=(f.necesita||[]);
+    const dist=(state.myPos&&f.lat!=null)?distKm(state.myPos,[f.lat,f.lng]):null;
+    return `<div class="card ${acopio?'acopio':(f.verificada?'verde':'')}">
+      <span class="badge ${acopio?'acopio':(f.verificada?'verde':'rojo')}">${acopio?'🏬 Centro de acopio':(f.verificada?'Verificada':'Sin verificar')}</span>
       <h3>${esc(f.nombre)}${f._pending?' ⏳':''}</h3>
-      <div class="meta">${f.tipo==='recoleccion'?'📍 Punto de recolección':'🏦 Cuenta bancaria'}${f.destino?' · va a '+esc(f.destino):''}</div>
+      <div class="meta">${acopio?'Donar cosas (ropa, comida, colchones…)':'🏦 Cuenta bancaria'}${f.destino?' · 🚚 va a '+esc(f.destino):''}${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
+      ${acopio&&nec.length?`<div class="tags" style="margin-top:8px"><b style="font-size:.92em;color:#7c3aed;margin-right:4px">Necesitan:</b>${nec.map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('')}</div>`:''}
+      ${acopio&&f.direccion?`<div class="meta" style="margin-top:6px">📍 Llevar a: ${esc(f.direccion)}</div>`:''}
       ${f.numero_cuenta?`<div class="acct"><span>${esc(f.banco?f.banco+' ':'')}${esc(f.numero_cuenta)}</span><button class="btn-mini" data-copy="${esc(f.numero_cuenta)}">Copiar</button></div>`:''}
       ${f.titular?`<div class="meta" style="margin-top:6px">Titular: ${esc(f.titular)}</div>`:''}
       ${f.contacto?`<div class="meta">Contacto: ${esc(f.contacto)}</div>`:''}
-      <div class="meta" style="margin-top:6px">${aportes.length} aporte(s) · ${conf} confirmado(s)</div>
+      ${!acopio?`<div class="meta" style="margin-top:6px">${aportes.length} donación(es) · ${conf} confirmada(s)</div>`:''}
       <div class="card-actions">
-        <button class="btn-mini acc" data-aportar="${f.id}">Anoté una donación</button>
-        ${mine(f)?`${!f.verificada?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar de confianza</button>`:''}
+        ${acopio&&f.lat!=null?`<button class="btn-mini acc" data-verfuente="${f.id}">📍 Ver en el mapa</button>`:''}
+        ${!acopio?`<button class="btn-mini acc" data-aportar="${f.id}">Anoté una donación</button>`:''}
+        ${mine(f)?`${!f.verificada&&!acopio?`<button class="btn-mini ok" data-verificar="${f.id}">Marcar de confianza</button>`:''}
+        ${acopio?`<button class="btn-mini" data-editf="${f.id}">✏️ Cambiar</button>`:''}
         <button class="btn-mini" data-delf="${f.id}">🗑 Borrar</button>`:''}
       </div>
     </div>`;
   }).join('');
+  cont.querySelectorAll('[data-verfuente]').forEach(b=>b.onclick=()=>{const f=state.fuentes.find(x=>x.id==b.dataset.verfuente);if(f&&f.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([f.lat,f.lng],15);},300);}});
+  cont.querySelectorAll('[data-editf]').forEach(b=>b.onclick=()=>{const f=state.fuentes.find(x=>x.id==b.dataset.editf);if(f)openForm('fuente',f,f.id);});
   cont.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy);toast('Número copiado');});
   cont.querySelectorAll('[data-aportar]').forEach(b=>b.onclick=()=>openForm('aporte',{fuente_id:b.dataset.aportar}));
   cont.querySelectorAll('[data-verificar]').forEach(b=>b.onclick=()=>update('fuentes',b.dataset.verificar,{verificada:true}));
@@ -330,20 +373,27 @@ function renderAportes(){
 }
 
 /* ================= MAPA ================= */
-// Iconos de Leaflet auto-alojados (mismo origen → funcionan offline, sin CDN)
-if(window.L){
-  L.Icon.Default.mergeOptions({
-    iconUrl:'vendor/leaflet/images/marker-icon.png',
-    iconRetinaUrl:'vendor/leaflet/images/marker-icon-2x.png',
-    shadowUrl:'vendor/leaflet/images/marker-shadow.png'
-  });
+/* Marcador propio dibujado en SVG (NO usa imágenes externas de Leaflet → nunca sale el
+   cuadrito con "?", y se ve nítido igual en iPhone y Android, online u offline). */
+function pinIcon(fill, glyph){
+  const g = glyph ? `<div class="pin-glyph">${glyph}</div>` : '';
+  const html = `<div class="pin-wrap">
+    <svg width="34" height="46" viewBox="0 0 34 46" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17 1C8.7 1 2 7.7 2 16c0 10.5 15 29 15 29s15-18.5 15-29C32 7.7 25.3 1 17 1z"
+            fill="${fill}" stroke="#ffffff" stroke-width="2.5"/>
+      <circle cx="17" cy="16" r="6" fill="#ffffff"/>
+    </svg>${g}</div>`;
+  return L.divIcon({ className:'pin-div', html, iconSize:[34,46], iconAnchor:[17,45], popupAnchor:[0,-40] });
 }
 let mapFitDone=false, userMoved=false, meMarker=null;
 // Capa base: CARTO Voyager — se ve limpia y consistente en TODO el país (ciudad y campo),
 // no como los tiles crudos de OSM que dejan las zonas rurales casi en blanco.
+// updateWhenIdle:false + keepBuffer alto → los tiles se piden mientras se mueve y quedan
+// pre-cargados alrededor, así el mapa se ve "ya cargado" y no en blanco/borroso.
 function baseTiles(){
   return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
     subdomains:'abcd', maxZoom:20, detectRetina:true, crossOrigin:true,
+    updateWhenIdle:false, updateWhenZooming:false, keepBuffer:8,
     attribution:'© OpenStreetMap · © CARTO'
   });
 }
@@ -364,6 +414,8 @@ function initMap(){
 function locateMe(center){
   if(!navigator.geolocation || !state.map) return;
   navigator.geolocation.getCurrentPosition(p=>{
+    state.myPos=[p.coords.latitude,p.coords.longitude];
+    if(ordenPuntos==='cercania') renderPuntos();
     if(!state.map) return;
     const ll=[p.coords.latitude,p.coords.longitude];
     if(meMarker) state.map.removeLayer(meMarker);
@@ -377,6 +429,7 @@ function fitToPoints(){
   const pts=[];
   vivos('puntos').forEach(p=>{ if(p.lat!=null&&p.lng!=null) pts.push([p.lat,p.lng]); });
   vivos('entregas').forEach(e=>{ if(e.lat!=null&&e.lng!=null) pts.push([e.lat,e.lng]); });
+  vivos('fuentes').forEach(f=>{ if(f.lat!=null&&f.lng!=null) pts.push([f.lat,f.lng]); });
   if(!pts.length) return;
   if(pts.length===1){ state.map.setView(pts[0],13); }
   else state.map.fitBounds(pts,{padding:[40,40],maxZoom:14});
@@ -396,8 +449,16 @@ function renderMap(){
   });
   vivos('entregas').forEach(e=>{
     if(e.lat==null||e.lng==null) return;
-    const m=L.marker([e.lat,e.lng]);
+    const m=L.marker([e.lat,e.lng],{icon:pinIcon('#2563eb','📦')});
     m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}`);
+    state.markers.addLayer(m);
+  });
+  // Centros de acopio (donaciones físicas): marca morada con caja; muestra qué necesitan
+  vivos('fuentes').forEach(f=>{
+    if(f.tipo!=='recoleccion' || f.lat==null || f.lng==null) return;
+    const nec=(f.necesita||[]).join(', ');
+    const m=L.marker([f.lat,f.lng],{icon:pinIcon('#7c3aed','🏬')});
+    m.bindPopup(`<b>🏬 ${esc(f.nombre)}</b><br>Centro de acopio${f.destino?' · va a '+esc(f.destino):''}${f.direccion?'<br>📍 '+esc(f.direccion):''}${nec?'<br><b>Necesitan:</b> '+esc(nec):''}`);
     state.markers.addLayer(m);
   });
   // La primera vez que llegan puntos, encuadra el mapa para que se VEAN (si el usuario no movió aún)
@@ -412,7 +473,7 @@ function setPick(lat,lng,zoom){
   const info=document.querySelector('#gps-info');
   if(info) info.innerHTML='📍 Ubicación fijada ('+gps.lat+', '+gps.lng+') · <b>arrastra el pin para ajustar</b>';
   if(pickMap){
-    if(!pickMarker){ pickMarker=L.marker([gps.lat,gps.lng],{draggable:true,autoPan:true}).addTo(pickMap);
+    if(!pickMarker){ pickMarker=L.marker([gps.lat,gps.lng],{draggable:true,autoPan:true,icon:pinIcon('#db2777')}).addTo(pickMap);
       pickMarker.on('dragend',()=>{const ll=pickMarker.getLatLng();setPick(ll.lat,ll.lng);}); }
     else pickMarker.setLatLng([gps.lat,gps.lng]);
     if(zoom) pickMap.setView([gps.lat,gps.lng],zoom);
@@ -422,15 +483,23 @@ function initPickMap(){
   const el=document.getElementById('pickmap'); if(!el||!window.L) return;
   destroyPick();
   const has=gps.lat!=null;
-  const start = has?[gps.lat,gps.lng] : (lastLatLng||[4.6,-74.1]);
+  // Arranca donde MÁS probable estén ya cargados los tiles (los del mapa principal):
+  // 1) lo ya elegido, 2) tu ubicación conocida, 3) lo último usado, 4) Colombia entera.
+  const start = has?[gps.lat,gps.lng] : (state.myPos || lastLatLng || [4.6,-74.1]);
+  const startZoom = has?15 : (state.myPos?14 : (lastLatLng?13:6));
+  el.classList.add('loading');                   // muestra "Cargando mapa…" hasta que llegan los tiles
   pickMap=L.map(el,{zoomControl:true,attributionControl:false});
-  pickMap.setView(start, has?15:(lastLatLng?13:6));
-  baseTiles().addTo(pickMap);
-  pickMarker=L.marker(start,{draggable:true,autoPan:true}).addTo(pickMap);
+  pickMap.setView(start, startZoom);
+  const tiles=baseTiles().addTo(pickMap);
+  tiles.on('load',()=>el.classList.remove('loading'));
+  setTimeout(()=>el.classList.remove('loading'),3500); // por si el evento no dispara
+  pickMarker=L.marker(start,{draggable:true,autoPan:true,icon:pinIcon('#db2777')}).addTo(pickMap);
   pickMarker.on('dragend',()=>{const ll=pickMarker.getLatLng();setPick(ll.lat,ll.lng);});
   if(has) setPick(start[0],start[1]);            // conserva lo elegido si ya había
+  else if(state.myPos){ setPick(start[0],start[1]); }  // sugiere tu ubicación como punto de partida
   pickMap.on('click',e=>setPick(e.latlng.lat,e.latlng.lng));  // tocar el mapa fija el punto
-  setTimeout(()=>{ pickMap&&pickMap.invalidateSize(); },200);
+  // invalidateSize varias veces: el modal se abre con animación y el mapa necesita re-medir
+  [80,250,600].forEach(t=>setTimeout(()=>{ pickMap&&pickMap.invalidateSize(); },t));
 }
 
 /* ================= FORMULARIOS ================= */
@@ -458,6 +527,12 @@ function openForm(kind, prefill={}, editId=null){
       <div class="row2"><div><label>Municipio</label><input name="municipio" placeholder="Ej: Timbío" value="${esc(P.municipio||'')}"></div>
       <div><label>Departamento</label><input name="departamento" placeholder="Ej: Cauca" value="${esc(P.departamento||'')}"></div></div>
       <label>¿Cuántas personas?</label><input name="personas" type="number" inputmode="numeric" placeholder="Ej: 40" value="${P.personas?esc(P.personas):''}">
+      <label>¿Qué tan urgente es?</label>
+      <select name="urgencia">
+        <option value="normal"${(P.urgencia||'normal')==='normal'?' selected':''}>Normal</option>
+        <option value="alta"${P.urgencia==='alta'?' selected':''}>🟠 Urgente</option>
+        <option value="critica"${P.urgencia==='critica'?' selected':''}>🔴 Crítico (vida en riesgo)</option>
+      </select>
       <label>¿Qué FALTA aquí? (toca lo que aplique)</label>${multi('faltan',P.faltan)}
       <label>¿Qué SOBRA / ya llegó?</label>${multi('sobran',P.sobran)}
       <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px" ${P.necesita_rescate?'checked':''}>🚨 Faltan rescatistas / gente atrapada</label>
@@ -481,16 +556,35 @@ function openForm(kind, prefill={}, editId=null){
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
       <button class="btn-primary" type="submit">Guardar entrega</button>`;
   } else if(kind==='fuente'){
-    title.textContent='Agregar una cuenta o punto';
+    const esAcopio=(P.tipo==='recoleccion');
+    title.textContent='Agregar una cuenta o centro de acopio';
     f.innerHTML=`
-      <label>Nombre *</label><input name="nombre" placeholder="Ej: Cruz Roja Cauca / Colecta Popayán" required>
-      <label>Tipo</label><select name="tipo"><option value="cuenta">Cuenta bancaria</option><option value="recoleccion">Punto de recolección físico</option></select>
-      <div class="row2"><div><label>Banco</label><input name="banco" placeholder="Bancolombia, Nequi…"></div>
-      <div><label>N° cuenta / celular</label><input name="numero_cuenta" placeholder="000-000000-00"></div></div>
-      <label>Titular</label><input name="titular" placeholder="A nombre de">
-      <label>¿A dónde va la ayuda?</label><input name="destino" placeholder="Ej: Chocó, Cali…">
-      <label>Contacto</label><input name="contacto" placeholder="WhatsApp / teléfono">
-      <label>Nota</label><textarea name="nota" placeholder="Qué se recibe, horarios…"></textarea>
+      <label>Nombre *</label><input name="nombre" placeholder="Ej: Cruz Roja Cauca / Acopio Popayán" value="${esc(P.nombre||'')}" required>
+      <label>¿Qué es?</label>
+      <select name="tipo" id="tipo-fuente">
+        <option value="cuenta"${!esAcopio?' selected':''}>🏦 Cuenta bancaria (donar dinero)</option>
+        <option value="recoleccion"${esAcopio?' selected':''}>🏬 Centro de acopio (donar cosas: ropa, comida, colchones…)</option>
+      </select>
+
+      <div id="cuenta-fields" style="${esAcopio?'display:none':''}">
+        <div class="row2"><div><label>Banco</label><input name="banco" placeholder="Bancolombia, Nequi…" value="${esc(P.banco||'')}"></div>
+        <div><label>N° cuenta / celular</label><input name="numero_cuenta" placeholder="000-000000-00" value="${esc(P.numero_cuenta||'')}"></div></div>
+        <label>Titular</label><input name="titular" placeholder="A nombre de" value="${esc(P.titular||'')}">
+      </div>
+
+      <div id="acopio-fields" style="${esAcopio?'':'display:none'}">
+        <div class="help">Un centro de acopio recibe cosas (no dinero). Di qué te falta para completar el envío y la gente cercana lleva lo que puede.</div>
+        <label>¿Qué NECESITAN? (lo que falta para completar el envío)</label>${multi('necesita',P.necesita)}
+        <label>Dirección (dónde llevar las cosas)</label><input name="direccion" placeholder="Ej: Colegio Central, Cra 5 #3-20" value="${esc(P.direccion||'')}">
+        <label>¿Dónde queda? Ubícalo en el mapa</label>
+        <div id="pickmap"></div>
+        <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el centro de acopio.</div>
+        <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
+      </div>
+
+      <label>¿A dónde va la ayuda? (destino del envío)</label><input name="destino" placeholder="Ej: Chocó, Cali, Buenaventura…" value="${esc(P.destino||'')}">
+      <label>Contacto</label><input name="contacto" placeholder="WhatsApp / teléfono" value="${esc(P.contacto||'')}">
+      <label>Nota</label><textarea name="nota" placeholder="Qué se recibe, horarios…">${esc(P.nota||'')}</textarea>
       <button class="btn-primary" type="submit">Guardar</button>`;
   } else if(kind==='aporte'){
     title.textContent='Anotar una donación';
@@ -522,8 +616,18 @@ function openForm(kind, prefill={}, editId=null){
   };
   f.querySelectorAll('.addother-btn').forEach(b=>b.onclick=()=>addCustom(b.dataset.for));
   f.querySelectorAll('.addother-inp').forEach(i=>i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addCustom(i.dataset.for); } }));
-  // mini-mapa selector (solo en punto y entrega)
-  if(kind==='punto'||kind==='entrega') initPickMap();
+  // mini-mapa selector (punto, entrega, y centro de acopio)
+  const acopioActivo = ()=> f.querySelector('#tipo-fuente') && f.querySelector('#tipo-fuente').value==='recoleccion';
+  if(kind==='punto'||kind==='entrega'|| (kind==='fuente'&&acopioActivo())) initPickMap();
+  // cambiar entre Cuenta / Centro de acopio muestra los campos correctos y prende el mapa
+  const tsel=f.querySelector('#tipo-fuente');
+  if(tsel) tsel.onchange=()=>{
+    const ac = tsel.value==='recoleccion';
+    const cf=f.querySelector('#cuenta-fields'), af=f.querySelector('#acopio-fields');
+    if(cf) cf.style.display = ac?'none':'';
+    if(af) af.style.display = ac?'':'none';
+    if(ac){ setTimeout(initPickMap,60); } else { destroyPick(); }
+  };
   // gps
   const gbtn=f.querySelector('#gps');
   if(gbtn) gbtn.onclick=()=>{
@@ -551,7 +655,8 @@ function submitForm(kind){
     if(!g('nombre')) return toast('Falta el nombre del lugar');
     table='puntos';
     data={ nombre:g('nombre'), municipio:g('municipio'), departamento:g('departamento'),
-      personas: parseInt(g('personas'))||0, faltan:readMulti('faltan'), sobran:readMulti('sobran'),
+      personas: parseInt(g('personas'))||0, urgencia:g('urgencia')||'normal',
+      faltan:readMulti('faltan'), sobran:readMulti('sobran'),
       necesita_rescate: !!fd.get('necesita_rescate'), nota:g('nota'), creado_por: cache(LS.user)||'',
       lat:gps.lat, lng:gps.lng, estado:'activo' };
   } else if(kind==='entrega'){
@@ -561,8 +666,11 @@ function submitForm(kind){
   } else if(kind==='fuente'){
     if(!g('nombre')) return toast('Falta el nombre');
     table='fuentes';
+    const esAcopio=g('tipo')==='recoleccion';
     data={ nombre:g('nombre'), tipo:g('tipo'), banco:g('banco'), numero_cuenta:g('numero_cuenta'),
-      titular:g('titular'), destino:g('destino'), contacto:g('contacto'), nota:g('nota'), verificada:false };
+      titular:g('titular'), destino:g('destino'), contacto:g('contacto'), nota:g('nota'), verificada:false,
+      necesita: esAcopio?readMulti('necesita'):null, direccion: esAcopio?g('direccion'):null,
+      lat: esAcopio?gps.lat:null, lng: esAcopio?gps.lng:null };
   } else if(kind==='aporte'){
     table='aportes';
     data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, estado:'reportado' };
@@ -617,6 +725,13 @@ function boot(){
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.screen));
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
   document.querySelectorAll('.seg-btn').forEach(b=>b.onclick=()=>{segDonar=b.dataset.seg;syncSeg();});
+  // toggle de orden en Lugares: por urgencia / por cercanía (sobrescribe el handler genérico de arriba)
+  document.querySelectorAll('#orden-puntos .seg-btn').forEach(b=>b.onclick=()=>{
+    ordenPuntos=b.dataset.orden;
+    document.querySelectorAll('#orden-puntos .seg-btn').forEach(x=>x.classList.toggle('active',x.dataset.orden===ordenPuntos));
+    if(ordenPuntos==='cercania' && !state.myPos){ toast('Buscando tu ubicación para ordenar por cercanía…'); locateMe(false); }
+    renderPuntos();
+  });
   // Bienvenida / guía (primera vez, y siempre disponible con el botón "Ayuda")
   const showWelcome=()=>$('#welcome').classList.remove('hidden');
   const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };

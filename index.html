@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=13" />
+<link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
 <div id="app">
@@ -49,6 +49,10 @@
         <h1>Lugares</h1>
         <p class="sub">Dónde falta ayuda y dónde ya sobra. Lo rojo es lo que está más solo.</p>
       </div>
+      <div class="seg" id="orden-puntos">
+        <button class="seg-btn active" data-orden="urgencia">🚨 Por urgencia</button>
+        <button class="seg-btn" data-orden="cercania">📍 Cerca de mí</button>
+      </div>
       <div class="filters" id="filtros-depto"></div>
       <div class="resumen" id="resumen-balance"></div>
       <div class="list" id="lista-puntos"></div>
@@ -68,16 +72,16 @@
     <!-- DONAR / DINERO -->
     <section class="screen" id="screen-donar">
       <div class="head">
-        <h1>Donar</h1>
-        <p class="sub">Cuentas y puntos para ayudar. Anota tu donación con la foto del recibo para dejar rastro.</p>
+        <h1>Ayudar</h1>
+        <p class="sub">No solo dinero: también puedes llevar cosas (ropa, comida, colchones) a un centro de acopio cercano.</p>
       </div>
       <div class="seg">
-        <button class="seg-btn active" data-seg="fuentes">Cuentas y puntos</button>
-        <button class="seg-btn" data-seg="aportes">Donaciones</button>
+        <button class="seg-btn active" data-seg="fuentes">Acopios y cuentas</button>
+        <button class="seg-btn" data-seg="aportes">Donaciones de dinero</button>
       </div>
       <div class="list" id="lista-fuentes"></div>
       <div class="list hidden" id="lista-aportes"></div>
-      <button class="fab" data-add="fuente">＋ Agregar una cuenta</button>
+      <button class="fab" data-add="fuente">＋ Agregar acopio o cuenta</button>
     </section>
 
     <!-- INFO -->
@@ -172,6 +176,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

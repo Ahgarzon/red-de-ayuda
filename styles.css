@@ -231,3 +231,18 @@ textarea{min-height:74px;resize:vertical}
 /* mini-mapa para elegir ubicación dentro del formulario */
 #pickmap{height:220px;border-radius:14px;overflow:hidden;border:1px solid var(--border);margin-top:8px;z-index:0}
 #pickmap .leaflet-control-attribution{display:none}
+
+/* ===== v14: marcador propio SVG (reemplaza el icono roto "?" de Leaflet) ===== */
+.pin-div{background:none;border:none}
+.pin-wrap{position:relative;width:34px;height:46px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.35))}
+.pin-glyph{position:absolute;top:5px;left:0;width:34px;text-align:center;font-size:15px;line-height:22px;pointer-events:none}
+
+/* indicador "Cargando mapa…" en el mini-mapa del formulario */
+#pickmap.loading::after{content:"Cargando mapa…";position:absolute;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:#dfe6ef;color:#5b6b7d;font-weight:700;font-size:15px}
+
+/* badge de urgencia (inline, no pisa el badge de estado de arriba-derecha) */
+.badge.urg{position:static;display:inline-block;margin:0 8px 8px 0;top:auto;right:auto;background:#fff3e0;color:#c2410c}
+
+/* centro de acopio (donaciones físicas) */
+.card.acopio{border-left:5px solid #7c3aed}
+.badge.acopio{background:#efe7ff;color:#6d28d9}
