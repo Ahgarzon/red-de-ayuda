@@ -221,6 +221,8 @@ function updatePending(){
    (activos en los últimos 3 min) y cuántos la han ABIERTO en total. Una sola llamada
    (RPC ayuda_ping). Sirve para saber de verdad si la gente ya está usando la app. */
 const LIVE = { ahora:null, total:null };
+const PUBLIC_AT = 100;   // el contador de visitantes se vuelve PÚBLICO al llegar a 100 dispositivos distintos
+function livePublic(){ return LIVE.total!=null && LIVE.total>=PUBLIC_AT; }
 async function pingLive(){
   try{
     const r = await api('ping', null, { device: ME });
@@ -232,9 +234,16 @@ async function pingLive(){
   }catch(e){ /* sin señal: el contador simplemente no se actualiza, no molesta */ }
 }
 function renderLive(){
-  const a=$('#stat-ahora'), t=$('#stat-total');
-  if(a) a.textContent = LIVE.ahora!=null ? LIVE.ahora : '—';
-  if(t) t.textContent = LIVE.total!=null ? LIVE.total : '—';
+  const card=$('#stats-card');
+  const pub=livePublic();
+  // El contador se registra siempre en el servidor (para poder medir), pero la VISTA
+  // permanece oculta hasta que 100 dispositivos distintos hayan abierto la app.
+  if(card) card.style.display = pub ? '' : 'none';
+  if(pub){
+    const a=$('#stat-ahora'), t=$('#stat-total');
+    if(a) a.textContent = LIVE.ahora!=null ? LIVE.ahora : '—';
+    if(t) t.textContent = LIVE.total!=null ? LIVE.total : '—';
+  }
   // refresca la píldora del mapa para incluir "N viendo ahora"
   if(_lastNet.ok!==undefined) setNet(_lastNet.ok, _lastNet.total);
 }
@@ -248,7 +257,7 @@ function setNet(ok, total){
   if(ok===undefined){ el.className='net'; lab.textContent='conectando…'; return; }
   el.className = 'net '+(ok?'on':'off');
   let txt = ok ? ('En vivo'+(total!=null?' · '+total+' lugares':'')) : 'Sin señal';
-  if(ok && LIVE.ahora!=null) txt += ' · 👀 '+LIVE.ahora+' viendo';
+  if(ok && livePublic() && LIVE.ahora!=null) txt += ' · 👀 '+LIVE.ahora+' viendo';
   lab.textContent = txt;
 }
 
