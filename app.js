@@ -1000,8 +1000,14 @@ function boot(){
   pullAll();          // trae datos del servidor
   flush();            // envía lo pendiente
   pingLive();         // registra este dispositivo y trae el contador de visitantes
-  setInterval(()=>{ if(navigator.onLine){ flush(); pullAll(); } }, 12000); // refresco periódico (payload liviano → seguro)
-  setInterval(()=>{ if(navigator.onLine) pingLive(); }, 45000);            // latido del contador de visitantes
+  // Refresco periódico. Antes eran 12s: con miles de celulares a la vez eso golpea muy
+  // fuerte el servidor (n8n). Lo subimos a ~30–40s CON JITTER (cada celular elige un valor
+  // distinto) para que 2.000 teléfonos NO consulten todos al mismo instante y se reparta la
+  // carga. La app igual se siente en vivo: al reabrirla o recibir señal refresca al instante
+  // (visibilitychange/focus/online más abajo), no hay que esperar el intervalo.
+  const REFRESH_MS = ()=> 30000 + Math.floor(Math.random()*10000);   // 30–40 s por dispositivo
+  (function loopRefresh(){ setTimeout(()=>{ if(navigator.onLine){ flush(); pullAll(); } loopRefresh(); }, REFRESH_MS()); })();
+  setInterval(()=>{ if(navigator.onLine) pingLive(); }, 60000);            // latido del contador de visitantes (1 min)
   // refresco inmediato al volver a la app (otro celular ve el cambio al reabrir, no en 12s)
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && navigator.onLine){ flush(); pullAll(); pingLive(); } });
   window.addEventListener('focus', ()=>{ if(navigator.onLine){ pullAll(); } });

@@ -8,15 +8,23 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='28';
+  var RUNNING='30';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
      .then(function(r){return r.json();})
      .then(function(d){
-       if(!d) return;
-       if(String(d.v)===RUNNING){ try{sessionStorage.removeItem('ay_upd');}catch(e){} return; }
-       if(sessionStorage.getItem('ay_upd')) return;      // ya intentamos una vez → no hacer bucle
-       sessionStorage.setItem('ay_upd','1');
+       if(!d||d.v==null) return;
+       var sv=String(d.v);
+       // Al día: el código que corre = el del servidor → no tocar nada.
+       if(sv===RUNNING){ try{localStorage.removeItem(KEY);}catch(e){} return; }
+       // Robustez: solo sanamos UNA vez por cada versión del servidor y lo recordamos en
+       // localStorage (persiste al cerrar/reabrir). Así, si por lo que sea el celular sigue
+       // con código viejo, NO vuelve a borrar caché y recargar en cada reapertura (ese bucle
+       // dejaba los botones muertos unos segundos). Se sana una vez y queda quieto.
+       var healed=null; try{ healed=localStorage.getItem(KEY); }catch(e){}
+       if(healed===sv) return;
+       try{ localStorage.setItem(KEY,sv); }catch(e){}
        var fin=function(){ location.reload(); };
        var tareas=[];
        if('serviceWorker' in navigator){ tareas.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(x){return x.unregister();}));})); }
@@ -34,7 +42,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=29" />
+<link rel="stylesheet" href="styles.css?v=30" />
 </head>
 <body>
 <div id="app">
@@ -233,6 +241,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
