@@ -48,8 +48,10 @@ body{
 .brand small{display:block;font-size:12.5px;opacity:.85}
 .help-btn{
   background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:20px;
-  padding:9px 14px;font-size:14px;font-weight:700
+  padding:9px 14px;font-size:14px;font-weight:700;flex:none;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:7px;line-height:1
 }
+.help-btn svg{width:18px;height:18px;display:block;flex:none}
 .help-btn:active{transform:scale(.96)}
 
 #screens{flex:1;overflow:hidden;position:relative}
@@ -65,12 +67,15 @@ body{
 
 /* MAPA */
 #map{position:absolute;inset:0}
+/* Leyenda: arriba-izquierda, DEBAJO del control de zoom (+/-). Así el botón flotante
+   de abajo (＋ Avisar) nunca la tapa, en ningún tamaño de pantalla. */
 .map-legend{
-  position:absolute;left:8px;bottom:12px;z-index:500;background:var(--surface);
-  border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);
-  padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text)
+  position:absolute;left:8px;top:96px;bottom:auto;z-index:500;background:rgba(255,255,255,.96);
+  border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);max-width:62vw;
+  padding:9px 11px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text)
 }
-.map-legend strong{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);margin-bottom:1px}
+.map-legend span{white-space:nowrap}
+.map-legend strong{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);margin-bottom:1px}
 .map-legend span{display:flex;align-items:center;gap:8px}
 .map-ctrls{position:absolute;right:12px;top:12px;z-index:600;display:flex;flex-direction:column;gap:8px}
 .map-ctrls button{
@@ -294,3 +299,22 @@ textarea{min-height:74px;resize:vertical}
 
 .foto-slot{margin:8px 0}
 .foto-slot .btn-mini{opacity:.85}
+
+/* ===== v19: proporción de botones en pantallas angostas ===== */
+.seg-btn{min-width:0;line-height:1.15}
+@media (max-width:360px){
+  .seg-btn{font-size:13.5px;padding:12px 5px}
+  .fab{padding:14px 18px;font-size:15.5px}
+  .help-btn{padding:8px 11px;font-size:13px}
+}
+
+/* ===== v19: vista de ESCRITORIO / PC — la app se centra como un celular, no estirada ===== */
+@media (min-width:820px){
+  html,body{overflow:auto;position:static;background:#0b1230}
+  #app{
+    position:fixed;top:0;bottom:0;left:50%;right:auto;transform:translateX(-50%);
+    width:460px;max-width:460px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.06),0 24px 80px rgba(0,0,0,.55)
+  }
+  .map-legend{max-width:280px}
+}
