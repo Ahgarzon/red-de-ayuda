@@ -1,6 +1,7 @@
 'use strict';
 /* ================= Red de Ayuda · Terremoto Colombia ================= */
 const API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-api';
+const SUG_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-sugerencia';
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
   aportes:'ay_aportes', queue:'ay_queue', user:'ay_user'
@@ -43,6 +44,23 @@ function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
 /* registros visibles = los NO archivados (nada se borra de la base; solo se oculta) */
 function vivos(table){ return (state[table]||[]).filter(r=>!r.archivado); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'),2600); }
+
+async function enviarSugerencia(){
+  const ta=$('#sug-text'), ci=$('#sug-contacto'), btn=$('#sug-enviar');
+  const texto=(ta.value||'').trim();
+  if(texto.length<4){ toast('Escribe tu idea primero 🙂'); ta.focus(); return; }
+  btn.disabled=true; const antes=btn.textContent; btn.textContent='Enviando…';
+  try{
+    const r=await fetch(SUG_API,{ method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ texto, contacto:(ci.value||'').trim(), device: ME }) });
+    if(!r.ok) throw new Error('http '+r.status);
+    ta.value=''; ci.value='';
+    const ok=$('#sug-ok'); if(ok) ok.classList.remove('hidden');
+    toast('¡Gracias! Tu sugerencia fue enviada 💛');
+  }catch(e){
+    toast('No se pudo enviar. Revisa tu internet e inténtalo otra vez.');
+  }finally{ btn.disabled=false; btn.textContent=antes; }
+}
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* distancia en km entre dos coordenadas (haversine) — para ordenar por cercanía */
@@ -793,6 +811,7 @@ function boot(){
   $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
   $('#btn-sync').onclick=()=>{ toast('Sincronizando…'); flush().then(pullAll); };
   $('#btn-share').onclick=()=>{ if(navigator.share) navigator.share({title:'Ayúdame Colombia', text:'App para coordinar ayudas del terremoto en Colombia', url:location.href}); else { navigator.clipboard&&navigator.clipboard.writeText(location.href); toast('Link copiado'); } };
+  const _sugBtn=$('#sug-enviar'); if(_sugBtn) _sugBtn.onclick=enviarSugerencia;
 
   window.addEventListener('online', ()=>{ setNet(true); flush(); });
   window.addEventListener('offline', ()=>setNet(false));

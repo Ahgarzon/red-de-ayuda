@@ -286,3 +286,8 @@ textarea{min-height:74px;resize:vertical}
   padding:10px 4px 2px;letter-spacing:.01em;display:flex;align-items:center;gap:7px
 }
 .zona-muni::before{content:"🏘️";font-size:15px}
+
+/* Buzón de sugerencias (v17) */
+.buzon-card textarea{margin-bottom:10px}
+.buzon-card .btn-primary{margin-top:12px}
+.sug-ok{color:#15803d;font-weight:800;margin-top:12px;background:#ecfdf3;border:1px solid #b7f0cf;border-radius:12px;padding:12px 14px;line-height:1.4}
