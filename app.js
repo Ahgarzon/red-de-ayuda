@@ -216,13 +216,40 @@ function updatePending(){
   if(info) info.textContent = n ? ('Pendiente por enviar: '+n) : 'Todo sincronizado ✓';
 }
 
+/* ---------- contador de visitantes en vivo ----------
+   Registra ESTE dispositivo (ME) en el servidor y trae cuántos hay VIENDO la app ahora
+   (activos en los últimos 3 min) y cuántos la han ABIERTO en total. Una sola llamada
+   (RPC ayuda_ping). Sirve para saber de verdad si la gente ya está usando la app. */
+const LIVE = { ahora:null, total:null };
+async function pingLive(){
+  try{
+    const r = await api('ping', null, { device: ME });
+    if(r && typeof r==='object'){
+      if(typeof r.ahora==='number') LIVE.ahora=r.ahora;
+      if(typeof r.total==='number') LIVE.total=r.total;
+      renderLive();
+    }
+  }catch(e){ /* sin señal: el contador simplemente no se actualiza, no molesta */ }
+}
+function renderLive(){
+  const a=$('#stat-ahora'), t=$('#stat-total');
+  if(a) a.textContent = LIVE.ahora!=null ? LIVE.ahora : '—';
+  if(t) t.textContent = LIVE.total!=null ? LIVE.total : '—';
+  // refresca la píldora del mapa para incluir "N viendo ahora"
+  if(_lastNet.ok!==undefined) setNet(_lastNet.ok, _lastNet.total);
+}
+
 /* ---------- estado de red ---------- */
+let _lastNet = { ok:undefined, total:undefined };
 function setNet(ok, total){
   const el=$('#netstatus'), lab=$('#netlabel');
+  if(ok!==undefined) _lastNet={ok, total};   // recuerda el último estado para re-pintar con el contador
   if(!el || !lab) return;   // NUNCA reventar si el indicador no está en el HTML (esto rompía la lectura del servidor)
   if(ok===undefined){ el.className='net'; lab.textContent='conectando…'; return; }
   el.className = 'net '+(ok?'on':'off');
-  lab.textContent = ok ? ('En vivo'+(total!=null?' · '+total+' lugares':'')) : 'Sin señal';
+  let txt = ok ? ('En vivo'+(total!=null?' · '+total+' lugares':'')) : 'Sin señal';
+  if(ok && LIVE.ahora!=null) txt += ' · 👀 '+LIVE.ahora+' viendo';
+  lab.textContent = txt;
 }
 
 /* ---------- semáforo ---------- */
@@ -890,9 +917,11 @@ function boot(){
   setTimeout(()=>state.map&&state.map.invalidateSize(),300);
   pullAll();          // trae datos del servidor
   flush();            // envía lo pendiente
+  pingLive();         // registra este dispositivo y trae el contador de visitantes
   setInterval(()=>{ if(navigator.onLine){ flush(); pullAll(); } }, 12000); // refresco periódico (payload liviano → seguro)
+  setInterval(()=>{ if(navigator.onLine) pingLive(); }, 45000);            // latido del contador de visitantes
   // refresco inmediato al volver a la app (otro celular ve el cambio al reabrir, no en 12s)
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && navigator.onLine){ flush(); pullAll(); } });
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && navigator.onLine){ flush(); pullAll(); pingLive(); } });
   window.addEventListener('focus', ()=>{ if(navigator.onLine){ pullAll(); } });
 
   if('serviceWorker' in navigator){

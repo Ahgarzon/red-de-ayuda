@@ -343,3 +343,11 @@ textarea{min-height:74px;resize:vertical}
 #netstatus::before{content:"";width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex:0 0 auto;}
 #netstatus.on::before{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.18);}
 #netstatus.off::before{background:#dc2626;}
+
+/* ---- Contador de visitantes (pantalla Ayuda) ---- */
+.stats-card .stats-row{display:flex;gap:10px;margin-top:6px}
+.stats-card .stat{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px 6px;text-align:center;box-shadow:none}
+.stats-card .stat-num{font-size:clamp(26px,8vw,34px);font-weight:800;line-height:1;color:var(--accent)}
+.stats-card .stat-lab{font-size:clamp(11px,3.2vw,12.5px);color:var(--text-soft);line-height:1.2}
+.aporta-card{border-left:5px solid var(--accent)}

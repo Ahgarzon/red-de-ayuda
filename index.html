@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='25';
+  var RUNNING='26';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
      .then(function(r){return r.json();})
@@ -34,7 +34,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=25" />
+<link rel="stylesheet" href="styles.css?v=26" />
 </head>
 <body>
 <div id="app">
@@ -113,11 +113,23 @@
     <!-- INFO -->
     <section class="screen" id="screen-info">
       <div class="head"><h1>Cómo se usa</h1></div>
+      <div class="info-card stats-card">
+        <h3>📊 Cuánta gente está usando la app</h3>
+        <div class="stats-row">
+          <div class="stat"><span class="stat-num" id="stat-ahora">—</span><span class="stat-lab">viéndola ahora</span></div>
+          <div class="stat"><span class="stat-num" id="stat-total">—</span><span class="stat-lab">la han abierto</span></div>
+        </div>
+      </div>
+      <div class="info-card aporta-card">
+        <h3>🙌 Ayúdanos a llenar el mapa</h3>
+        <p>No hace falta ser el encargado. Si sabes de un lugar cerca de ti que necesita ayuda —o donde ya sobra— márcalo tú. Toma 20 segundos y puede llevar la ayuda a un pueblo que nadie ha visto.</p>
+        <button class="btn-primary" data-add="punto" style="margin-top:12px">＋ Avisar un lugar que conozco</button>
+      </div>
       <button id="btn-tour" class="btn-sec big" style="margin:0 16px 4px">▶ Ver la guía paso a paso</button>
       <div class="info-card video-card">
         <h3>🎬 Video: cómo usar la app</h3>
         <p style="margin-bottom:10px">Un video corto que explica, paso a paso y módulo por módulo, cómo usar Ayúdame Colombia.</p>
-        <video id="tuto-video" class="tuto-video" controls playsinline preload="none" poster="tutorial-poster.jpg?v=25" src="tutorial.mp4?v=25"></video>
+        <video id="tuto-video" class="tuto-video" controls playsinline preload="none" poster="tutorial-poster.jpg?v=26" src="tutorial.mp4?v=26"></video>
       </div>
       <div class="info-card buzon-card">
         <h3>💬 Buzón de sugerencias</h3>
@@ -217,6 +229,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
