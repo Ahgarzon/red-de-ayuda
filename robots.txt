@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xn--aydamecolombia-mrb.space/sitemap.xml
