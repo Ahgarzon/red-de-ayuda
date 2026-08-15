@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="background:#232c73">
 <head>
 <meta charset="UTF-8" />
 <script>
@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='32';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var RUNNING='33';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
   var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
@@ -77,9 +77,39 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=32" />
+<link rel="stylesheet" href="styles.css?v=33" />
+<!-- SPLASH CRÍTICO (estilos EN LÍNEA, sin depender de styles.css). Se pinta al instante y
+     evita el "blanco puro" en señal débil o en el navegador de Facebook/Instagram (que no
+     tienen Service Worker). boot() lo oculta; si la app no arranca en 9s, ofrece Reintentar. -->
+<style>
+#splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;background:linear-gradient(160deg,#232c73 0%,#3646d9 100%);
+  color:#fff;font-family:'Liberation Sans','DejaVu Sans',Arial,sans-serif;text-align:center;padding:24px;
+  -webkit-transition:opacity .35s ease;transition:opacity .35s ease}
+#splash.off{opacity:0;pointer-events:none}
+#splash .sp-heart{font-size:52px;line-height:1;animation:sp-pulse 1.1s ease-in-out infinite}
+#splash h1{font-size:24px;font-weight:800;margin:2px 0 0}
+#splash p{font-size:15px;opacity:.88;margin:0;max-width:300px}
+#splash .sp-spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;
+  border-radius:50%;animation:sp-rot .8s linear infinite}
+#splash .sp-retry{display:none;margin-top:8px}
+#splash.slow .sp-spin{display:none}
+#splash.slow .sp-retry{display:block}
+#splash .sp-btn{background:#fff;color:#232c73;border:none;border-radius:14px;padding:13px 26px;
+  font-size:16px;font-weight:800;cursor:pointer;-webkit-appearance:none}
+@keyframes sp-rot{to{transform:rotate(360deg)}}
+@keyframes sp-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+</style>
 </head>
-<body>
+<body style="background:#232c73">
+<!-- Se ve de inmediato, aun sin CSS ni JS cargados: nunca "blanco puro". -->
+<div id="splash">
+  <span class="sp-heart">♥</span>
+  <h1>Ayúdame Colombia</h1>
+  <div class="sp-spin"></div>
+  <p class="sp-slow-msg" style="display:none">Está tardando por la señal. Puedes reintentar:</p>
+  <div class="sp-retry"><button class="sp-btn" onclick="location.reload()">Reintentar</button></div>
+</div>
 <div id="app">
   <header class="topbar">
     <div class="brand">
@@ -277,6 +307,20 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
+<!-- RED DE SEGURIDAD del splash: si en 9s la app no arrancó (JS roto, recurso colgado o
+     navegador que bloquea todo), mostramos "Reintentar" para que el usuario no quede atrapado
+     en una pantalla que gira para siempre. Va en su PROPIO <script>: corre aunque app.js falle. -->
+<script>
+(function(){
+  var sp=document.getElementById('splash'); if(!sp) return;
+  setTimeout(function(){
+    if(!window.__booted){
+      sp.classList.add('slow');
+      var m=sp.querySelector('.sp-slow-msg'); if(m) m.style.display='block';
+    }
+  }, 9000);
+})();
+</script>
 </body>
 </html>

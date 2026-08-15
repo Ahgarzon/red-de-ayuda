@@ -12,7 +12,20 @@ const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
-const cache = (k,v)=>{ if(v===undefined){ try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null} } localStorage.setItem(k,JSON.stringify(v)); };
+/* Guardado a PRUEBA DE FALLOS. Algunos navegadores (el de Facebook/Instagram, o Safari en
+   modo privado) BLOQUEAN localStorage y hacen que setItem/getItem LANCEN error. Antes eso
+   reventaba app.js en la primera línea que guardaba (deviceId) y la app quedaba muerta / en
+   blanco. Ahora NADA de storage puede tumbar la app: si el navegador lo bloquea, usamos una
+   memoria temporal en RAM (la sesión funciona igual; solo no recuerda al cerrar). */
+const _mem = {};
+const cache = (k,v)=>{
+  if(v===undefined){
+    try{ const s=localStorage.getItem(k); return s==null ? (k in _mem?_mem[k]:null) : JSON.parse(s); }
+    catch(e){ return (k in _mem)?_mem[k]:null; }
+  }
+  _mem[k]=v;
+  try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){ /* storage bloqueado/lleno: queda en RAM, la app no se cae */ }
+};
 const uid = ()=> 'tmp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
 
 /* ---------- identidad anónima del dispositivo (sin registro, sin barreras) ----------
@@ -1012,36 +1025,54 @@ function syncSeg(){
 }
 
 /* ================= INIT ================= */
+function hideSplash(){
+  window.__booted = true;
+  const sp = document.getElementById('splash');
+  if(sp){ sp.classList.add('off'); setTimeout(()=>{ try{ sp.remove(); }catch(e){} }, 400); }
+}
 function boot(){
-  // cargar cache primero (instantáneo / offline)
-  for(const t of ['puntos','entregas','fuentes','aportes']) state[t]=cache(LS[t])||[];
-  state.queue=cache(LS.queue)||[];
-  if(!cache(LS.user)){ /* nombre opcional, no obligamos */ }
-  renderAll();
+  // Marcamos el arranque y quitamos el "Cargando…" de inmediato: aunque algo más falle,
+  // el usuario NUNCA queda en pantalla girando para siempre. Los botones se cablean abajo
+  // en bloques guardados, así que la app queda usable pase lo que pase.
+  hideSplash();
 
-  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.screen));
-  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
-  document.querySelectorAll('.seg-btn').forEach(b=>b.onclick=()=>{segDonar=b.dataset.seg;syncSeg();});
-  // toggle de orden en Lugares: por urgencia / por cercanía (sobrescribe el handler genérico de arriba)
-  document.querySelectorAll('#orden-puntos .seg-btn').forEach(b=>b.onclick=()=>{
-    ordenPuntos=b.dataset.orden;
-    document.querySelectorAll('#orden-puntos .seg-btn').forEach(x=>x.classList.toggle('active',x.dataset.orden===ordenPuntos));
-    if(ordenPuntos==='cercania' && !state.myPos){ toast('Buscando tu ubicación para ordenar por cercanía…'); locateMe(false); }
-    renderPuntos();
-  });
-  // Bienvenida / guía (primera vez, y siempre disponible con el botón "Ayuda")
-  const showWelcome=()=>$('#welcome').classList.remove('hidden');
-  const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };
-  $('#welcome-go').onclick=hideWelcome;
-  $('#btn-guia').onclick=showWelcome;
-  $('#btn-tour').onclick=showWelcome;
-  if(!cache('ay_seen')) showWelcome();
+  // cargar cache primero (instantáneo / offline) — nunca frena el arranque
+  try{
+    for(const t of ['puntos','entregas','fuentes','aportes']) state[t]=cache(LS[t])||[];
+    state.queue=cache(LS.queue)||[];
+  }catch(e){ console.warn('cache', e); }
 
-  $('#modal-close').onclick=closeModal;
-  $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
-  $('#btn-sync').onclick=()=>{ toast('Sincronizando…'); flush().then(pullAll); };
-  $('#btn-share').onclick=()=>{ if(navigator.share) navigator.share({title:'Ayúdame Colombia', text:'App para coordinar ayudas del terremoto en Colombia', url:location.href}); else { navigator.clipboard&&navigator.clipboard.writeText(location.href); toast('Link copiado'); } };
-  const _sugBtn=$('#sug-enviar'); if(_sugBtn) _sugBtn.onclick=enviarSugerencia;
+  // CABLEAR LOS BOTONES PRIMERO (no dependen de datos). Antes iba renderAll() antes que esto:
+  // si el pintado fallaba, los botones quedaban muertos ("se queda ahí"). Ahora la navegación
+  // y el botón Empezar SIEMPRE quedan vivos, aunque el pintado o el mapa fallen.
+  try{
+    document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.screen));
+    document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
+    document.querySelectorAll('.seg-btn').forEach(b=>b.onclick=()=>{segDonar=b.dataset.seg;syncSeg();});
+    document.querySelectorAll('#orden-puntos .seg-btn').forEach(b=>b.onclick=()=>{
+      ordenPuntos=b.dataset.orden;
+      document.querySelectorAll('#orden-puntos .seg-btn').forEach(x=>x.classList.toggle('active',x.dataset.orden===ordenPuntos));
+      if(ordenPuntos==='cercania' && !state.myPos){ toast('Buscando tu ubicación para ordenar por cercanía…'); locateMe(false); }
+      renderPuntos();
+    });
+    // Bienvenida / guía (primera vez, y siempre disponible con el botón "Ayuda")
+    const showWelcome=()=>$('#welcome').classList.remove('hidden');
+    const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };
+    $('#welcome-go').onclick=hideWelcome;
+    $('#btn-guia').onclick=showWelcome;
+    $('#btn-tour').onclick=showWelcome;
+    if(!cache('ay_seen')) showWelcome();
+  }catch(e){ console.warn('wire-ui', e); }
+
+  try{ renderAll(); }catch(e){ console.warn('renderAll', e); }
+
+  try{
+    $('#modal-close').onclick=closeModal;
+    $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
+    $('#btn-sync').onclick=()=>{ toast('Sincronizando…'); flush().then(pullAll); };
+    $('#btn-share').onclick=()=>{ if(navigator.share) navigator.share({title:'Ayúdame Colombia', text:'App para coordinar ayudas del terremoto en Colombia', url:location.href}); else { navigator.clipboard&&navigator.clipboard.writeText(location.href); toast('Link copiado'); } };
+    const _sugBtn=$('#sug-enviar'); if(_sugBtn) _sugBtn.onclick=enviarSugerencia;
+  }catch(e){ console.warn('wire-extra', e); }
 
   window.addEventListener('online', ()=>{ setNet(true); flush(); });
   window.addEventListener('offline', ()=>setNet(false));
@@ -1074,4 +1105,6 @@ function boot(){
     navigator.serviceWorker.addEventListener('message', e=>{ if(e.data&&e.data.type==='sw-updated') _recargarUnaVez(); });
   }
 }
-document.addEventListener('DOMContentLoaded', boot);
+// Arranca al cargar el DOM; si ya estaba listo (algunos navegadores in-app), arranca ya.
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
