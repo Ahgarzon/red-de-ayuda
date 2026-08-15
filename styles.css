@@ -165,6 +165,20 @@ body{
 .badge.rojo{background:#fde8e8;color:#b91c1c}
 .badge.verde{background:#e6f4ea;color:#15803d}
 .badge.rescate{background:#fbe0ef;color:#a3166b}
+.badge.gris{background:#e9edf2;color:#475569}
+.badge.azul{position:static;display:inline-block;margin:0 8px 8px 0;top:auto;right:auto;background:#e0f2fe;color:#0369a1}
+/* Personas desaparecidas */
+.screen.haslist>.desap-search{flex:none;padding:10px 16px 0}
+.desap-search input{width:100%;height:46px;border-radius:13px;border:1px solid var(--border);background:var(--surface);padding:0 14px;font-size:16px;color:var(--text)}
+.card.desap.encontrado{opacity:.9}
+.card.desap.fallecido{opacity:.82}
+.claim{margin:8px 0 2px;padding:9px 12px;border-radius:11px;font-size:14px;line-height:1.4;font-weight:600}
+.claim.verde{background:#e6f4ea;color:#15803d}
+.claim.gris{background:#eef1f5;color:#475569}
+.avlist{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+.av{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:9px 11px;font-size:14px;line-height:1.45;color:var(--text)}
+.av .avt{font-weight:700;margin-right:4px}
+.av .avd{display:block;margin-top:3px;font-size:12px;color:var(--text-soft)}
 /* distintivo "Tú lo creaste": inline (no tapa el badge de estado), para hallar rápido lo propio */
 .badge.tuyo{position:static;display:inline-block;margin:0 8px 8px 0;top:auto;right:auto;background:#e0edff;color:#1d4ed8}
 .card:has(.badge.tuyo){box-shadow:0 0 0 2px #bcd6ff inset, var(--shadow, 0 1px 3px rgba(0,0,0,.06))}

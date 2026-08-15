@@ -4,11 +4,12 @@ const API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-api';
 const SUG_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-sugerencia';
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
-  aportes:'ay_aportes', queue:'ay_queue', user:'ay_user'
+  aportes:'ay_aportes', desaparecidos:'ay_desap', avistamientos:'ay_avist',
+  queue:'ay_queue', user:'ay_user'
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[] };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], desaparecidos:[], avistamientos:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[] };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -143,7 +144,7 @@ async function pull(table){
 
 async function pullAll(){
   try{ setNet(); }catch(e){}
-  const tablas = ['puntos','entregas','fuentes','aportes'];
+  const tablas = ['puntos','entregas','fuentes','aportes','desaparecidos','avistamientos'];
   // Cada tabla se trae POR SEPARADO. Si una falla, NO se toca a las demás y
   // NUNCA se borra lo que ya estaba: pull() solo reemplaza cuando llega un array
   // válido del servidor; ante error conserva lo que había (cache/pendientes).
@@ -325,7 +326,7 @@ function askConfirm(title, msg, cb){
 }
 
 /* ================= RENDER ================= */
-function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); updatePending(); }
+function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); renderDesaparecidos(); updatePending(); }
 
 let filtroDepto='__all';
 let ordenPuntos='urgencia';   // 'urgencia' | 'cercania'
@@ -565,6 +566,78 @@ function renderAportes(){
       update('aportes',b.dataset.confirmar,{estado:'confirmado', confirmado_por:v||'confirmado'});
     });
   });
+  wireFotos(cont);
+}
+
+/* ================= PERSONAS DESAPARECIDAS ================= */
+let filtroDesap='todos';       // todos | desaparecido | encontrado | fallecido
+let qDesap='';                 // texto de búsqueda
+const DESAP_BADGE={
+  desaparecido:{cls:'rojo',  txt:'🔴 Buscándose'},
+  encontrado:  {cls:'verde', txt:'🟢 Apareció con vida'},
+  fallecido:   {cls:'gris',  txt:'🕯️ Falleció'}
+};
+function avistTxt(t){ return t==='visto'?'👁️ La vieron':(t==='encontrado'?'🟢 Reportan que apareció':(t==='fallecido'?'🕯️ Reportan fallecimiento':'ℹ️ Información')); }
+function renderDesaparecidos(){
+  const cont=$('#lista-desap'); if(!cont) return;
+  let pers=vivos('desaparecidos');
+  // resumen (siempre sobre el total, no sobre el filtro)
+  const nBusc=pers.filter(p=>(p.estado||'desaparecido')==='desaparecido').length;
+  const nEnc=pers.filter(p=>p.estado==='encontrado').length;
+  const nFall=pers.filter(p=>p.estado==='fallecido').length;
+  const res=$('#resumen-desap');
+  if(res) res.innerHTML=`<div class="stat"><b>${pers.length}</b><small>personas</small></div><div class="stat r"><b>${nBusc}</b><small>buscándose</small></div><div class="stat g"><b>${nEnc}</b><small>aparecieron</small></div>`+(nFall?`<div class="stat"><b>${nFall}</b><small>fallecidos</small></div>`:'');
+  // filtro por estado
+  if(filtroDesap!=='todos') pers=pers.filter(p=>(p.estado||'desaparecido')===filtroDesap);
+  // búsqueda por texto
+  const q=(qDesap||'').trim().toLowerCase();
+  if(q) pers=pers.filter(p=>[p.nombre,p.municipio,p.departamento,p.descripcion].filter(Boolean).join(' ').toLowerCase().includes(q));
+  // orden: lo mío primero, luego los que ya aparecieron/fallecieron abajo, luego alfabético
+  pers.sort((a,b)=>mioFirst(a,b)||((a.estado&&a.estado!=='desaparecido'?1:0)-(b.estado&&b.estado!=='desaparecido'?1:0))||String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+  if(!pers.length){ cont.innerHTML='<div class="empty">'+(q||filtroDesap!=='todos'?'No hay personas con ese filtro o búsqueda.':'Todavía no hay personas reportadas.')+'</div>'; return; }
+  const avistDe=id=>vivos('avistamientos').filter(a=>a.desaparecido_id===id).sort((x,y)=>new Date(y.created_at)-new Date(x.created_at));
+  cont.innerHTML=pers.map(p=>{
+    const est=p.estado||'desaparecido';
+    const bd=DESAP_BADGE[est]||DESAP_BADGE.desaparecido;
+    const lugar=[p.municipio,p.departamento].filter(Boolean).join(', ');
+    const avs=avistDe(p.id);
+    // reportes SIN confirmar de que apareció/falleció (aviso suave, no cambia el estado oficial)
+    const claim=avs.find(a=>a.tipo==='encontrado')?'encontrado':(avs.find(a=>a.tipo==='fallecido')?'fallecido':null);
+    const avHtml=avs.length?`<div class="avlist">${avs.map(a=>`<div class="av"><span class="avt">${avistTxt(a.tipo)}</span> ${esc(a.descripcion||'')}${a.lugar?` · 📍 ${esc(a.lugar)}`:''}${a.contacto?` · ☎ ${esc(a.contacto)}`:''}<span class="avd">${new Date(a.created_at).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</span></div>`).join('')}</div>`:'';
+    return `<div class="card desap ${est}">
+      <span class="badge ${bd.cls}">${bd.txt}</span>
+      ${p.verificada?'<span class="badge azul">✔ Lista oficial</span>':''}
+      ${esMio(p)?'<span class="badge tuyo">✍️ Tú lo reportaste</span>':''}
+      <h3>${esc(p.nombre)}${p._pending?' ⏳':''}</h3>
+      ${lugar?`<div class="meta">📍 Desapareció en: ${esc(lugar)}</div>`:''}
+      ${p.edad||p.sexo?`<div class="meta">${[p.edad?('Edad: '+esc(p.edad)):'',p.sexo?esc(p.sexo):''].filter(Boolean).join(' · ')}</div>`:''}
+      ${p.descripcion?`<div class="meta" style="margin-top:6px">${esc(p.descripcion)}</div>`:''}
+      ${p.contacto?`<div class="meta">☎ Contacto familia: ${esc(p.contacto)}</div>`:''}
+      ${fotoSlot('desaparecidos',p.id,p.foto,p.tiene_foto)}
+      ${est==='desaparecido'&&claim==='encontrado'?'<div class="claim verde">🟢 Alguien reporta que ya apareció (sin confirmar). Ver abajo.</div>':''}
+      ${est==='desaparecido'&&claim==='fallecido'?'<div class="claim gris">🕯️ Alguien reporta un fallecimiento (sin confirmar). Ver abajo.</div>':''}
+      ${avHtml}
+      <div class="card-actions">
+        <button class="btn-mini acc" data-avistar="${p.id}">👁️ Lo vi / tengo info</button>
+        ${mine(p)?`
+        ${est!=='encontrado'?`<button class="btn-mini ok" data-desest="${p.id}:encontrado">✅ Confirmar: apareció</button>`:''}
+        ${est!=='desaparecido'?`<button class="btn-mini" data-desest="${p.id}:desaparecido">↩ Sigue buscándose</button>`:''}
+        <button class="btn-mini" data-editdesap="${p.id}">✏️ Editar</button>
+        <button class="btn-mini" data-deldesap="${p.id}">🗑 Borrar</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  cont.querySelectorAll('[data-avistar]').forEach(b=>b.onclick=()=>{
+    const p=state.desaparecidos.find(x=>x.id==b.dataset.avistar);
+    openForm('avistamiento',{desaparecido_id:b.dataset.avistar, _nombre:p?p.nombre:''});
+  });
+  cont.querySelectorAll('[data-desest]').forEach(b=>b.onclick=()=>{
+    const [id,est]=b.dataset.desest.split(':');
+    if(est==='encontrado') askConfirm('¿Confirmas que apareció con vida?','Se marcará como “Apareció con vida” para todos.',()=>update('desaparecidos',id,{estado:'encontrado'}));
+    else update('desaparecidos',id,{estado:'desaparecido'});
+  });
+  cont.querySelectorAll('[data-editdesap]').forEach(b=>b.onclick=()=>{const p=state.desaparecidos.find(x=>x.id==b.dataset.editdesap);if(p)openForm('desaparecido',p,p.id);});
+  cont.querySelectorAll('[data-deldesap]').forEach(b=>b.onclick=()=>askConfirm('¿Quitar esta persona de la lista?','',()=>del('desaparecidos',b.dataset.deldesap)));
   wireFotos(cont);
 }
 
@@ -892,6 +965,37 @@ function openForm(kind, prefill={}, editId=null){
       <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
       <div class="help">Anota una donación que ya hiciste. Queda como prueba; se marca “confirmado” cuando se verifica que llegó.</div>
       <button class="btn-primary" type="submit">Guardar donación</button>`;
+  } else if(kind==='desaparecido'){
+    title.textContent = editId ? 'Editar persona desaparecida' : 'Reportar una persona desaparecida';
+    f.innerHTML=`
+      <label>Nombre completo *</label><input name="nombre" placeholder="Nombre y apellidos" value="${esc(P.nombre||'')}" required>
+      <div class="row2"><div><label>Municipio donde desapareció</label><input name="municipio" placeholder="Ej: Pereira" value="${esc(P.municipio||'')}"></div>
+      <div><label>Departamento</label><input name="departamento" placeholder="Ej: Risaralda" value="${esc(P.departamento||'')}"></div></div>
+      <div class="row2"><div><label>Edad (opcional)</label><input name="edad" placeholder="Ej: 24" value="${esc(P.edad||'')}"></div>
+      <div><label>Sexo (opcional)</label><input name="sexo" placeholder="Hombre / Mujer" value="${esc(P.sexo||'')}"></div></div>
+      <label>Señas / cómo iba vestida / detalles</label><textarea name="descripcion" placeholder="Estatura, ropa, tatuajes, última vez que se le vio…">${esc(P.descripcion||'')}</textarea>
+      <label>Contacto de la familia (para avisar si aparece)</label><input name="contacto" placeholder="WhatsApp / teléfono" value="${esc(P.contacto||'')}">
+      <label>Foto de la persona (ayuda mucho a identificarla)</label>
+      <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
+      ${editId&&P.tiene_foto?'<div class="help">Ya tiene una foto. Sube otra solo si quieres cambiarla.</div>':''}
+      <button class="btn-primary" type="submit">${editId?'Guardar cambios':'Publicar reporte'}</button>`;
+  } else if(kind==='avistamiento'){
+    title.textContent = P._nombre ? ('Reportar sobre: '+P._nombre) : 'Reportar información';
+    f.innerHTML=`
+      <input type="hidden" name="desaparecido_id" value="${esc(P.desaparecido_id||'')}">
+      ${P._nombre?`<div class="help">Estás reportando información sobre <b>${esc(P._nombre)}</b>. Gracias, esto puede ayudar a su familia. 🙏</div>`:''}
+      <label>¿Qué quieres reportar?</label>
+      <select name="tipo">
+        <option value="visto">👁️ La vi / la reconocí</option>
+        <option value="info">ℹ️ Tengo información sobre ella</option>
+        <option value="encontrado">🟢 Sé que ya apareció (con vida)</option>
+        <option value="fallecido">🕯️ Lamentablemente, falleció</option>
+      </select>
+      <label>Cuéntanos lo que sabes *</label><textarea name="descripcion" placeholder="Dónde la viste, cómo estaba, cualquier dato útil…" required>${esc(P.descripcion||'')}</textarea>
+      <label>¿Dónde? (lugar / barrio / ciudad)</label><input name="lugar" placeholder="Ej: Hospital de Pereira, albergue…" value="${esc(P.lugar||'')}">
+      <label>Tu contacto (opcional, por si la familia necesita hablarte)</label><input name="contacto" placeholder="WhatsApp / teléfono" value="${esc(P.contacto||'')}">
+      <div class="help">Tu reporte queda visible bajo esa persona. Si dices que apareció o falleció, se avisa como “sin confirmar” hasta que la familia o el equipo lo confirme.</div>
+      <button class="btn-primary" type="submit">Enviar reporte</button>`;
   }
   // multi toggles
   f.querySelectorAll('.multi .opt').forEach(o=>o.onclick=()=>o.classList.toggle('on'));
@@ -977,6 +1081,18 @@ function submitForm(kind){
   } else if(kind==='aporte'){
     table='aportes';
     data={ fuente_id:g('fuente_id')||null, quien:g('quien'), monto:g('monto'), comprobante:currentPhoto||null, tiene_foto: !!currentPhoto, estado:'reportado' };
+  } else if(kind==='desaparecido'){
+    if(!g('nombre')) return toast('Falta el nombre de la persona');
+    table='desaparecidos';
+    data={ nombre:g('nombre'), municipio:g('municipio'), departamento:g('departamento'),
+      edad:g('edad'), sexo:g('sexo'), descripcion:g('descripcion'), contacto:g('contacto'),
+      estado:'desaparecido', fuente:'Reporte de la comunidad', verificada:false,
+      foto:currentPhoto||null, tiene_foto: !!currentPhoto };
+  } else if(kind==='avistamiento'){
+    if(!g('descripcion')) return toast('Cuéntanos lo que sabes');
+    table='avistamientos';
+    data={ desaparecido_id:g('desaparecido_id')||null, tipo:g('tipo')||'info',
+      descripcion:g('descripcion'), lugar:g('lugar'), contacto:g('contacto') };
   }
   const afterDonar=()=>{ if(table==='fuentes'||table==='aportes'){ segDonar= table==='aportes'?'aportes':'fuentes'; syncSeg(); } };
   if(editingKind===kind && editingId){
@@ -1038,7 +1154,7 @@ function boot(){
 
   // cargar cache primero (instantáneo / offline) — nunca frena el arranque
   try{
-    for(const t of ['puntos','entregas','fuentes','aportes']) state[t]=cache(LS[t])||[];
+    for(const t of ['puntos','entregas','fuentes','aportes','desaparecidos','avistamientos']) state[t]=cache(LS[t])||[];
     state.queue=cache(LS.queue)||[];
   }catch(e){ console.warn('cache', e); }
 
@@ -1055,6 +1171,13 @@ function boot(){
       if(ordenPuntos==='cercania' && !state.myPos){ toast('Buscando tu ubicación para ordenar por cercanía…'); locateMe(false); }
       renderPuntos();
     });
+    // Personas desaparecidas: filtro por estado + búsqueda
+    document.querySelectorAll('#filtro-desap .seg-btn').forEach(b=>b.onclick=()=>{
+      filtroDesap=b.dataset.desap;
+      document.querySelectorAll('#filtro-desap .seg-btn').forEach(x=>x.classList.toggle('active',x.dataset.desap===filtroDesap));
+      renderDesaparecidos();
+    });
+    const dq=$('#desap-q'); if(dq) dq.oninput=()=>{ qDesap=dq.value; renderDesaparecidos(); };
     // Bienvenida / guía (primera vez, y siempre disponible con el botón "Ayuda")
     const showWelcome=()=>$('#welcome').classList.remove('hidden');
     const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };
