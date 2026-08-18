@@ -802,6 +802,13 @@ function setPick(lat,lng,zoom){
     if(zoom) pickMap.setView([gps.lat,gps.lng],zoom);
   }
 }
+// Al tocar una referencia del mini-mapa (una necesidad o un centro de acopio) se fija el pin ahí
+// y, si el campo del lugar está vacío, se pone su nombre solo.
+function pickRef(lat,lng,nombre){
+  setPick(lat,lng,16);
+  const lug=document.querySelector('#modal input[name="lugar"]');
+  if(lug && !lug.value.trim() && nombre) lug.value=nombre;
+}
 function initPickMap(){
   const el=document.getElementById('pickmap'); if(!el||!window.L) return;
   // Buscador de dirección/lugar: escribe y cae el pin solo (no hay que arrastrarlo a mano)
@@ -842,6 +849,28 @@ function initPickMap(){
   if(has) setPick(start[0],start[1]);            // conserva lo elegido si ya había
   else if(state.myPos){ setPick(start[0],start[1]); }  // sugiere tu ubicación como punto de partida
   pickMap.on('click',e=>setPick(e.latlng.lat,e.latlng.lng));  // tocar el mapa fija el punto
+  // Referencias: los MISMOS lugares del mapa principal (necesidades y centros de acopio),
+  // para ubicar la entrega tocando uno en vez de adivinar dónde queda.
+  const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
+  const refs=[];
+  vivos('puntos').forEach(p=>{
+    if(p.lat==null||p.lng==null) return;
+    const m=L.circleMarker([p.lat,p.lng],{radius:9,color:'#fff',weight:2,fillColor:cols[color(p)],fillOpacity:.9}).addTo(pickMap);
+    m.bindTooltip(esc(p.nombre),{direction:'top',offset:[0,-8],className:'mk-label'});
+    m.on('click',()=>pickRef(p.lat,p.lng,p.nombre));
+    refs.push([p.lat,p.lng]);
+  });
+  vivos('fuentes').forEach(f=>{
+    if(f.tipo!=='recoleccion'||f.lat==null||f.lng==null) return;
+    const m=L.marker([f.lat,f.lng],{icon:pinIcon('#7c3aed','🏬')}).addTo(pickMap);
+    m.bindTooltip(esc(f.nombre),{direction:'top',offset:[0,-28],className:'mk-label mk-label-acopio'});
+    m.on('click',()=>pickRef(f.lat,f.lng,f.nombre));
+    refs.push([f.lat,f.lng]);
+  });
+  // Si aún no hay un pin fijado, encuadra el mini-mapa para que ESAS referencias se vean
+  if(!has && !state.myPos && refs.length){
+    try{ if(refs.length===1) pickMap.setView(refs[0],13); else pickMap.fitBounds(refs,{padding:[30,30],maxZoom:13}); }catch(e){}
+  }
   // invalidateSize varias veces: el modal se abre con animación y el mapa necesita re-medir
   [80,250,600].forEach(t=>setTimeout(()=>{ pickMap&&pickMap.invalidateSize(); },t));
 }
@@ -882,7 +911,7 @@ function openForm(kind, prefill={}, editId=null){
       <label><input type="checkbox" name="necesita_rescate" style="width:auto;display:inline;margin-right:8px" ${P.necesita_rescate?'checked':''}>🚨 Faltan rescatistas / gente atrapada</label>
       <label>Nota (opcional)</label><textarea name="nota" placeholder="Detalles: qué se necesita con urgencia, cómo llegar…">${esc(P.nota||'')}</textarea>
       <label>Foto del lugar (opcional)</label>
-      <input type="file" accept="image/*" capture="environment" id="foto"><img class="photo-prev" id="prev">
+      <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
       ${editId&&P.tiene_foto?'<div class="help">Ya tiene una foto. Sube otra solo si quieres cambiarla.</div>':''}
       <label>¿Dónde queda? Ubícalo en el mapa</label>
       <div id="pickmap"></div>
@@ -910,10 +939,10 @@ function openForm(kind, prefill={}, editId=null){
       <label>¿Quién entrega?</label><input name="quien_entrego" placeholder="Tu nombre u organización">
       <label>¿Qué se entregó?</label><input name="items" placeholder="Ej: 20 colchones, agua, mercados">
       <label>Foto de la entrega (prueba)</label>
-      <input type="file" accept="image/*" capture="environment" id="foto"><img class="photo-prev" id="prev">
+      <input type="file" accept="image/*" id="foto"><img class="photo-prev" id="prev">
       <label>¿Dónde se entregó? Ubícalo en el mapa</label>
       <div id="pickmap"></div>
-      <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el lugar. O usa tu GPS.</div>
+      <div class="help" id="gps-info">Toca un punto del mapa (una necesidad o un centro de acopio) para marcar ahí, o toca cualquier lugar / arrastra el pin. También puedes usar tu GPS.</div>
       <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
       <button class="btn-primary" type="submit">Guardar entrega</button>`;
   } else if(kind==='fuente'){
