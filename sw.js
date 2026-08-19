@@ -1,9 +1,9 @@
-const APP='ayuda-v40';
+const APP='ayuda-v41';
 const TILES='ayuda-tiles-v3';
-const BASE='ayuda-base-v1';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
+const BASE='ayuda-base-v2';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
 importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
 const SHELL=[
-  './','./index.html','./styles.css?v=40','./app.js?v=40','./manifest.webmanifest','./base-tiles.js',
+  './','./index.html','./styles.css?v=41','./app.js?v=41','./manifest.webmanifest','./base-tiles.js',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -20,7 +20,12 @@ self.addEventListener('install', e=>{
       const b=await caches.open(BASE);
       const faltan=[];
       for(const u of (self.BASE_TILES||[])){ if(!(await b.match(u))) faltan.push(u); }
-      await Promise.allSettled(faltan.map(u=>b.add(new Request(u,{mode:'cors'}))));
+      // En señal débil (el caso real en zona de desastre) disparar ~830 tiles de golpe ahoga la
+      // conexión y ninguna termina. Se bajan de a lotes chicos: es más lento pero SÍ completa.
+      const LOTE=12;
+      for(let i=0;i<faltan.length;i+=LOTE){
+        await Promise.allSettled(faltan.slice(i,i+LOTE).map(u=>b.add(new Request(u,{mode:'cors'}))));
+      }
     }catch(_){}
   })());
   self.skipWaiting();
