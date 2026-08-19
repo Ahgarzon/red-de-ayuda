@@ -761,8 +761,12 @@ let mapFitDone=false, userMoved=false, meMarker=null;
 // updateWhenIdle:false + keepBuffer alto → los tiles se piden mientras se mueve y quedan
 // pre-cargados alrededor, así el mapa se ve "ya cargado" y no en blanco/borroso.
 function baseTiles(){
-  return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-    subdomains:'abcd', maxZoom:20, detectRetina:true, crossOrigin:true,
+  // URLs DETERMINISTAS (un solo subdominio 'a', sin retina) → cada tile tiene UNA sola URL,
+  // así el mapa base de Colombia precargado en el service worker (base-tiles.js) calza EXACTO
+  // y se ve al instante aunque no haya señal. keepBuffer alto + tiles de bajo zoom precargados
+  // → nunca queda en blanco: si falta el detalle de calle, se ve igual el país/región debajo.
+  return L.tileLayer('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
+    subdomains:'a', maxZoom:20, detectRetina:false, crossOrigin:true,
     updateWhenIdle:false, updateWhenZooming:false, keepBuffer:8,
     attribution:'© OpenStreetMap · © CARTO'
   });

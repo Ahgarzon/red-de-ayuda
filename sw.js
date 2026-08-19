@@ -1,21 +1,35 @@
-const APP='ayuda-v37';
+const APP='ayuda-v38';
 const TILES='ayuda-tiles-v3';
+const BASE='ayuda-base-v1';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
+importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
 const SHELL=[
-  './','./index.html','./styles.css?v=37','./app.js?v=37','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=38','./app.js?v=38','./manifest.webmanifest','./base-tiles.js',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png','./vendor/leaflet/images/layers.png','./vendor/leaflet/images/layers-2x.png'
 ];
 self.addEventListener('install', e=>{
-  e.waitUntil(caches.open(APP).then(c=>Promise.allSettled(SHELL.map(u=>c.add(u)))));
+  e.waitUntil((async()=>{
+    // 1) cascarón de la app (crítico) — debe quedar guardado sí o sí
+    const c=await caches.open(APP);
+    await Promise.allSettled(SHELL.map(u=>c.add(u)));
+    // 2) mapa base de Colombia (bajo zoom) — se guarda en 2º plano; si algún tile falla, no
+    //    rompe la instalación (allSettled). Así el país siempre se dibuja aunque no haya señal.
+    try{
+      const b=await caches.open(BASE);
+      const faltan=[];
+      for(const u of (self.BASE_TILES||[])){ if(!(await b.match(u))) faltan.push(u); }
+      await Promise.allSettled(faltan.map(u=>b.add(new Request(u,{mode:'cors'}))));
+    }catch(_){}
+  })());
   self.skipWaiting();
 });
 self.addEventListener('activate', e=>{
   e.waitUntil((async()=>{
     // borra los cachés de versiones anteriores
     const ks = await caches.keys();
-    await Promise.all(ks.filter(k=>k!==APP&&k!==TILES).map(k=>caches.delete(k)));
+    await Promise.all(ks.filter(k=>k!==APP&&k!==TILES&&k!==BASE).map(k=>caches.delete(k)));
     await self.clients.claim();
     /* AUTO-SANACIÓN: al activar una versión NUEVA del SW, avisamos a las pestañas abiertas
        para que tomen el código fresco con UNA sola recarga (la hace la página, con bandera
@@ -44,12 +58,18 @@ self.addEventListener('fetch', e=>{
   // version.json: SIEMPRE red, nunca caché (es el que detecta si el celular corre código viejo)
   if(/version\.json($|\?)/.test(url.pathname+url.search)){ return; }
 
-  // Tiles del mapa: cache-first (guarda la zona ya vista para verla sin señal)
+  // Tiles del mapa: cache-first. Busca en el mapa base PRECARGADO (BASE) y en lo ya visto
+  // (TILES). Si no está y hay red, lo trae y lo guarda; si no hay señal, ya está el país/región
+  // del mapa base, así que el mapa NUNCA queda en blanco.
   if(/tile\.openstreetmap\.org|tile\.opentopomap\.org|basemaps\.cartocdn\.com/.test(url.hostname)){
-    e.respondWith(caches.open(TILES).then(async c=>{
-      const hit=await c.match(req); if(hit) return hit;
-      try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }catch(err){ return hit||Response.error(); }
-    }));
+    e.respondWith((async()=>{
+      const base=await caches.open(BASE);
+      const pre=await base.match(req); if(pre) return pre;      // mapa base de Colombia (offline)
+      const c=await caches.open(TILES);
+      const hit=await c.match(req); if(hit) return hit;          // zona ya vista
+      try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }
+      catch(err){ return hit||Response.error(); }
+    })());
     return;
   }
 
