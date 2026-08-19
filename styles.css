@@ -442,3 +442,81 @@ textarea{min-height:74px;resize:vertical}
 .sw.ancla{background:rgba(14,165,233,.18);border:1px solid #0ea5e9}
 /* botón de anclas apagado */
 #btn-anclas.off{opacity:.5}
+
+/* ================= MODO OPERATIVO · ENTIDADES (v40) ================= */
+/* Banner en "Lugares" cuando estás logueado como entidad */
+.ent-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 16px 8px;
+  padding:9px 13px;border-radius:13px;background:linear-gradient(120deg,#e8f0ff,#eef2ff);
+  border:1px solid #cdd9fb;color:#1e2a5e;font-size:14.5px}
+.ent-banner b{font-weight:800}
+/* Badge de atención en las tarjetas de punto (para todos) */
+.atn-badge{display:inline-block;color:#fff;font-weight:800;font-size:12px;border-radius:999px;
+  padding:3px 10px;margin:0 6px 6px 0;vertical-align:middle}
+/* Controles de atención (solo entidades) en la tarjeta */
+.atn-ctrls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.btn-mini.atn{border-color:#c7d2fe;background:#eef2ff;color:#1e2a5e;font-weight:700}
+.btn-mini.atn.go{background:#2563eb;border-color:#2563eb;color:#fff}
+.btn-mini.atn.done{background:#16a34a;border-color:#16a34a;color:#fff}
+/* Botones dentro del popup del mapa */
+.popup-atn{display:inline-block;margin:6px 6px 0 0;padding:7px 11px;border-radius:10px;border:none;
+  background:#2563eb;color:#fff;font-weight:800;font-size:13px;cursor:pointer}
+.popup-atn.done{background:#16a34a}
+/* Tarjeta de acceso en la sección Ayuda */
+.entidad-card{border-left:5px solid #2563eb}
+/* Overlay del modo entidades */
+.ent-overlay{position:fixed;inset:0;z-index:1200;background:rgba(15,18,45,.55);
+  display:flex;align-items:flex-end;justify-content:center;padding:0}
+.ent-overlay.hidden{display:none}
+.ent-sheet{position:relative;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;
+  background:var(--surface);border-radius:22px 22px 0 0;padding:22px 18px calc(26px + var(--safe-bot));
+  box-shadow:0 -8px 40px rgba(20,22,55,.3);-webkit-overflow-scrolling:touch}
+@media(min-width:600px){.ent-overlay{align-items:center}.ent-sheet{border-radius:22px}}
+.ent-sheet .x{position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:50%;
+  border:none;background:var(--surface-2);color:var(--text);font-size:18px;cursor:pointer;z-index:2}
+.ent-intro h2{margin:2px 40px 8px 0;font-size:22px}
+.ent-intro p{margin:0 0 9px;color:var(--text-soft);font-size:15px;line-height:1.45}
+.ent-note{background:#eef2ff;border:1px solid #d6def9;border-radius:12px;padding:9px 12px;color:#26356e !important}
+.ent-tabs{display:flex;gap:8px;margin:14px 0 12px}
+.ent-tab{flex:1;padding:11px;border-radius:12px;border:1px solid var(--border);background:var(--surface);
+  font-size:14.5px;font-weight:700;color:var(--text-soft);cursor:pointer}
+.ent-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ent-pane{display:flex;flex-direction:column}
+.ent-pane.hidden{display:none}
+.ent-pane label{font-size:13.5px;font-weight:700;color:var(--text-soft);margin:10px 0 5px}
+.ent-pane input,.ent-pane select{font-size:16px;padding:12px 13px;border-radius:12px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);width:100%;box-sizing:border-box}
+.ent-pane .btn-primary{margin-top:16px}
+.ent-hint{font-size:13.5px;color:var(--text-soft);margin:9px 0 0;line-height:1.4}
+.ent-ok{margin-top:14px;background:#e9f9ef;border:1px solid #b7ebc8;border-radius:12px;padding:13px;
+  font-size:14.5px;color:#14532d;line-height:1.5;text-align:center}
+.ent-ok.hidden{display:none}
+.ent-code{display:inline-block;font-size:30px;font-weight:900;letter-spacing:.14em;color:#14532d;margin:6px 0}
+/* Tablero */
+.ent-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 14px}
+.ent-head h2{margin:0;font-size:20px}
+.ent-sub{margin:2px 0 0;color:var(--text-soft);font-size:14px}
+.tab-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.tab-cell{background:var(--surface-2);border-radius:14px;padding:13px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.tab-cell b{font-size:26px;font-weight:900;color:var(--text)}
+.tab-cell small{font-size:12.5px;color:var(--text-soft)}
+.tab-cell.crit{background:#fdeceb;border:1px solid #f5c6c3}
+.tab-cell.crit b{color:var(--rojo)}
+.tab-cell.cam b{color:#2563eb}
+.tab-cell.done b{color:var(--verde)}
+.ent-mine{background:#eef2ff;border:1px solid #cdd9fb;border-radius:12px;padding:10px 13px;
+  font-size:14px;color:#1e2a5e;margin-bottom:6px}
+.ent-h3{margin:16px 0 8px;font-size:16px}
+.ent-list{display:flex;flex-direction:column;gap:9px}
+.tab-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border:1px solid var(--border);border-left:5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.tab-row.rojo,.tab-row.rescate{border-left-color:var(--rojo)}
+.tab-row.ambar{border-left-color:var(--ambar)}
+.tab-row.verde{border-left-color:var(--verde)}
+.tr-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tr-main b{font-size:15px;line-height:1.25}
+.tr-main span{font-size:12.5px;color:var(--text-soft)}
+.tr-act{display:flex;gap:6px;flex:none}
+.ent-munis{display:flex;flex-direction:column;gap:6px}
+.muni-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--surface-2);border-radius:10px;padding:9px 12px;font-size:14px}
+.muni-row b{font-size:16px;color:var(--accent)}

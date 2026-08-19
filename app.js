@@ -5,7 +5,7 @@ const SUG_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-sugerenc
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
   aportes:'ay_aportes', desaparecidos:'ay_desap', avistamientos:'ay_avist',
-  queue:'ay_queue', user:'ay_user'
+  queue:'ay_queue', user:'ay_user', entidad:'ay_entidad'
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
@@ -419,8 +419,196 @@ function askConfirm(title, msg, cb){
   m.onclick=e=>{ if(e.target.id==='ask') m.classList.add('hidden'); };
 }
 
+/* ================= MODO OPERATIVO · ENTIDADES (Fase 1) =================
+   Capa ENCIMA del mapa ciudadano para entidades de respuesta (ambulancias, bomberos,
+   Cruz Roja, Defensa Civil, policía, alcaldías, hospitales). El ciudadano sigue reportando
+   igual y SIN registro; lo que exige REGISTRO Y APROBACIÓN es cambiar el "estado de atención"
+   de un punto (sin atender → voy en camino → resuelto). Así dos unidades no van al mismo sitio
+   y se ve un tablero de lo crítico. La autorización se valida EN LA BASE (RPC ayuda_atender):
+   el navegador solo manda el código; si la entidad no está aprobada, la base lo rechaza. */
+const ENT_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-entidad';
+const TIPOS_ENT = [['ambulancia','🚑 Ambulancia'],['bomberos','🚒 Bomberos'],['cruz_roja','➕ Cruz Roja'],['defensa_civil','🛟 Defensa Civil'],['policia','👮 Policía'],['ejercito','🎖️ Ejército'],['hospital','🏥 Hospital / Salud'],['alcaldia','🏛️ Alcaldía / Gobierno'],['otro','🤝 Otra entidad']];
+const TIPO_LBL = Object.fromEntries(TIPOS_ENT.map(([k,v])=>[k,v]));
+let entOpen=false;
+function entidad(){ return cache(LS.entidad)||null; }
+function esEntidad(){ const e=entidad(); return !!(e&&e.codigo); }
+/* estado de atención legible (para TODOS: badge en la tarjeta y en el mapa) */
+const ATN = { en_camino:{txt:'Atendiendo',ico:'🚑',col:'#2563eb'}, resuelto:{txt:'Resuelto',ico:'✅',col:'#16a34a'} };
+/* "bomberos · Nombre" (lo que guarda la base) → "🚒 Nombre" (ya escapado para HTML) */
+function nomEnt(s){ const i=String(s||'').indexOf(' · '); if(i<0) return esc(s); const t=String(s).slice(0,i), n=String(s).slice(i+3); const emoji=(TIPO_LBL[t]||'').split(' ')[0]||''; return esc((emoji?emoji+' ':'')+n); }
+function atnBadge(p){ const a=p.atencion; if(!a||a==='sin_atender') return ''; const s=ATN[a]; if(!s) return ''; return `<span class="atn-badge" style="background:${s.col}">${s.ico} ${s.txt}${p.atendido_nombre?': '+nomEnt(p.atendido_nombre):''}</span>`; }
+/* controles de atención en la tarjeta (SOLO para entidades logueadas) */
+function atnCtrls(p){
+  if(!esEntidad()) return '';
+  const a=p.atencion||'sin_atender'; let b='';
+  if(a==='sin_atender') b=`<button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy en camino</button><button class="btn-mini atn done" data-atender="resuelto:${p.id}">✅ Resuelto</button>`;
+  else if(a==='en_camino') b=`<button class="btn-mini atn done" data-atender="resuelto:${p.id}">✅ Marcar resuelto</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Liberar</button>`;
+  else b=`<button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Reabrir</button>`;
+  return `<div class="atn-ctrls">${b}</div>`;
+}
+/* bloque de atención dentro del popup del mapa (onclick inline → atender() es global) */
+function atnPopup(p){
+  const a=p.atencion||'sin_atender'; let s='';
+  if(a!=='sin_atender' && ATN[a]) s+=`<br><span style="color:${ATN[a].col}"><b>${ATN[a].ico} ${ATN[a].txt}</b>${p.atendido_nombre?': '+nomEnt(p.atendido_nombre):''}</span>`;
+  if(esEntidad()){
+    if(a==='sin_atender') s+=`<br><button class="popup-atn" onclick="atender('${p.id}','en_camino')">🚑 Voy</button> <button class="popup-atn done" onclick="atender('${p.id}','resuelto')">✅ Resuelto</button>`;
+    else if(a==='en_camino') s+=`<br><button class="popup-atn done" onclick="atender('${p.id}','resuelto')">✅ Resuelto</button> <button class="popup-atn" onclick="atender('${p.id}','sin_atender')">↩︎ Liberar</button>`;
+    else s+=`<br><button class="popup-atn" onclick="atender('${p.id}','sin_atender')">↩︎ Reabrir</button>`;
+  }
+  return s;
+}
+/* Cambiar el estado de atención de un punto. La base exige entidad APROBADA (por su código);
+   si no lo está, devuelve error y no cambia nada. No se encola offline: es una acción de
+   coordinación que necesita confirmación del servidor. */
+async function atender(id, estado){
+  const e=entidad(); if(!e||!e.codigo){ toast('Entra como entidad primero'); openEntidad(); return; }
+  const p=state.puntos.find(x=>String(x.id)===String(id)); if(!p) return;
+  try{
+    const res=await api('atender', null, { codigo:e.codigo, id, estado });
+    if(Array.isArray(res) && res[0]){
+      Object.assign(p,{atencion:res[0].atencion, atendido_por:res[0].atendido_por, atendido_nombre:res[0].atendido_nombre, atendido_at:res[0].atendido_at});
+      cache(LS.puntos, state.puntos); renderAll(); if(entOpen) renderEntidad();
+      toast(estado==='resuelto'?'Marcado como resuelto ✅':estado==='en_camino'?'Vas en camino 🚑 · los demás ya lo ven':'Punto liberado');
+    } else { toast('Tu entidad no está aprobada aún, o el código no es válido.'); }
+  }catch(err){ toast('No se pudo (revisa tu internet). El estado no cambió.'); }
+}
+
+function openEntidad(){ entOpen=true; renderEntidad(); const el=$('#entidad'); if(el) el.classList.remove('hidden'); }
+function closeEntidad(){ entOpen=false; const el=$('#entidad'); if(el) el.classList.add('hidden'); }
+function salirEntidad(){ cache(LS.entidad,null); try{localStorage.removeItem(LS.entidad);}catch(e){} renderEntidad(); renderAll(); toast('Saliste del modo entidad'); }
+
+function entFormsHTML(){
+  const guard = cache('ay_ent_cod');
+  return `
+  <div class="ent-intro">
+    <h2>🚑 Modo entidades</h2>
+    <p>Para ambulancias, bomberos, Cruz Roja, Defensa Civil, policía, alcaldías y hospitales. Coordinen la respuesta sobre el MISMO mapa: marca qué punto vas a atender (para que dos unidades no vayan al mismo sitio) y mira el tablero de lo crítico.</p>
+    <p class="ent-note">🔒 Solo entidades <b>registradas y aprobadas</b> pueden cambiar el estado de atención. El registro lo revisa el equipo antes de activarlo.</p>
+  </div>
+  <div class="ent-tabs">
+    <button class="ent-tab active" data-et="login">Ya tengo código</button>
+    <button class="ent-tab" data-et="reg">Registrar mi entidad</button>
+  </div>
+  <div class="ent-pane" id="ent-pane-login">
+    <label>Código de acceso (6 dígitos)</label>
+    <input id="ent-cod" inputmode="numeric" maxlength="6" placeholder="Ej: 482913" value="${guard?esc(guard):''}">
+    <button class="btn-primary" id="ent-login-go">Entrar</button>
+    <p class="ent-hint" id="ent-login-msg">${guard?'Tienes un código guardado en este equipo. Si ya lo aprobaron, toca Entrar.':''}</p>
+  </div>
+  <div class="ent-pane hidden" id="ent-pane-reg">
+    <label>Nombre de la entidad *</label>
+    <input id="er-nombre" placeholder="Ej: Bomberos Voluntarios de Popayán">
+    <label>Tipo *</label>
+    <select id="er-tipo">${TIPOS_ENT.map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+    <label>Ciudad</label>
+    <input id="er-ciudad" placeholder="Ej: Popayán">
+    <label>Responsable / contacto</label>
+    <input id="er-resp" placeholder="Nombre de quien coordina">
+    <label>Teléfono / WhatsApp</label>
+    <input id="er-tel" inputmode="tel" placeholder="Ej: 300 000 0000">
+    <label>Correo</label>
+    <input id="er-email" type="email" placeholder="correo@entidad.gov.co">
+    <button class="btn-primary" id="ent-reg-go">Enviar registro</button>
+    <div class="ent-ok hidden" id="ent-reg-ok"></div>
+  </div>`;
+}
+function tabRow(p){
+  const c=color(p);
+  return `<div class="tab-row ${c}">
+    <div class="tr-main"><b>${esc(p.nombre)}</b><span>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} pers.</span></div>
+    <div class="tr-act"><button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy</button></div>
+  </div>`;
+}
+function tableroHTML(e){
+  const ps=vivos('puntos');
+  const isCrit=p=>p.necesita_rescate||p.urgencia==='critica'||color(p)==='rojo'||color(p)==='rescate';
+  const sin=ps.filter(p=>!p.atencion||p.atencion==='sin_atender');
+  const cam=ps.filter(p=>p.atencion==='en_camino');
+  const res=ps.filter(p=>p.atencion==='resuelto');
+  const critSin=sin.filter(isCrit);
+  const mios=cam.filter(p=>p.atendido_por && p.atendido_por===e.id);
+  const byM={}; sin.forEach(p=>{ const m=[p.municipio,p.departamento].filter(Boolean).join(', ')||'Sin ubicación'; byM[m]=(byM[m]||0)+1; });
+  const topM=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  return `
+  <div class="ent-head">
+    <div><h2>${esc(TIPO_LBL[e.tipo]||'Entidad')}</h2><p class="ent-sub">${esc(e.nombre)}${e.ciudad?' · '+esc(e.ciudad):''}</p></div>
+    <button class="btn-sec" id="ent-salir">Salir</button>
+  </div>
+  <div class="tab-grid">
+    <div class="tab-cell crit"><b>${critSin.length}</b><small>críticos sin atender</small></div>
+    <div class="tab-cell"><b>${sin.length}</b><small>sin atender</small></div>
+    <div class="tab-cell cam"><b>${cam.length}</b><small>en atención</small></div>
+    <div class="tab-cell done"><b>${res.length}</b><small>resueltos</small></div>
+  </div>
+  ${mios.length?`<div class="ent-mine">🚑 Tu entidad va en camino a <b>${mios.length}</b> punto${mios.length!==1?'s':''}.</div>`:''}
+  <h3 class="ent-h3">🚨 Críticos sin atender</h3>
+  <div class="ent-list">${critSin.length?critSin.sort((a,b)=>urgScore(b)-urgScore(a)).slice(0,12).map(tabRow).join(''):'<div class="empty">Nada crítico sin atender ahora mismo. 🙌</div>'}</div>
+  <h3 class="ent-h3">📍 Dónde se concentra lo pendiente</h3>
+  <div class="ent-munis">${topM.length?topM.map(([m,n])=>`<div class="muni-row"><span>${esc(m)}</span><b>${n}</b></div>`).join(''):'<div class="empty">—</div>'}</div>`;
+}
+function renderEntidad(){
+  const body=$('#ent-body'); if(!body) return;
+  const e=entidad();
+  body.innerHTML = (e&&e.codigo) ? tableroHTML(e) : entFormsHTML();
+  wireEntidad(body);
+}
+function wireEntidad(body){
+  body.querySelectorAll('.ent-tab').forEach(t=>t.onclick=()=>{
+    body.querySelectorAll('.ent-tab').forEach(x=>x.classList.toggle('active',x===t));
+    const pl=body.querySelector('#ent-pane-login'), pr=body.querySelector('#ent-pane-reg');
+    if(pl) pl.classList.toggle('hidden',t.dataset.et!=='login');
+    if(pr) pr.classList.toggle('hidden',t.dataset.et!=='reg');
+  });
+  const lg=body.querySelector('#ent-login-go'); if(lg) lg.onclick=loginEntidad;
+  const rg=body.querySelector('#ent-reg-go'); if(rg) rg.onclick=registrarEntidad;
+  const sl=body.querySelector('#ent-salir'); if(sl) sl.onclick=salirEntidad;
+  body.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1),s.slice(0,i)); });
+  body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
+}
+async function loginEntidad(){
+  const inp=$('#ent-cod'), msg=$('#ent-login-msg'); if(!inp) return;
+  const cod=(inp.value||'').replace(/\D/g,'').slice(0,6);
+  if(cod.length<6){ if(msg) msg.textContent='Escribe tu código de 6 dígitos.'; return; }
+  if(msg) msg.textContent='Verificando…';
+  try{
+    const res=await api('entidad_login', null, {codigo:cod});
+    const row=Array.isArray(res)&&res[0]?res[0]:null;
+    if(!row){ if(msg) msg.textContent='❌ Código no válido. Revisa que esté bien escrito.'; return; }
+    if(row.estado==='pendiente'){ if(msg) msg.textContent='⏳ Tu registro está EN REVISIÓN. Te avisamos apenas se apruebe.'; return; }
+    if(row.estado!=='aprobada'){ if(msg) msg.textContent='Este acceso no está activo. Escríbenos si crees que es un error.'; return; }
+    cache(LS.entidad, {id:row.id, nombre:row.nombre, tipo:row.tipo, ciudad:row.ciudad, responsable:row.responsable, codigo:cod});
+    renderEntidad(); renderAll(); toast('¡Entraste como '+row.nombre+'! 🚑');
+  }catch(e){ if(msg) msg.textContent='No se pudo verificar. Revisa tu internet.'; }
+}
+async function registrarEntidad(){
+  const g=id=>{ const el=$(id); return el?(el.value||'').trim():''; };
+  const nombre=g('#er-nombre'), tipo=($('#er-tipo')?$('#er-tipo').value:'otro'), ciudad=g('#er-ciudad'),
+        responsable=g('#er-resp'), telefono=g('#er-tel'), email=g('#er-email');
+  const ok=$('#ent-reg-ok'), btn=$('#ent-reg-go');
+  if(nombre.length<3){ toast('Escribe el nombre de la entidad'); return; }
+  if(!telefono && !email){ toast('Deja un teléfono o un correo de contacto'); return; }
+  if(btn){ btn.disabled=true; var antes=btn.textContent; btn.textContent='Enviando…'; }
+  try{
+    const r=await fetch(ENT_API,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({nombre,tipo,ciudad,responsable,telefono,email})});
+    const j=await r.json();
+    if(j&&j.ok&&j.codigo){
+      cache('ay_ent_cod', j.codigo);
+      if(ok){ ok.classList.remove('hidden'); ok.innerHTML=`✅ <b>Registro enviado.</b><br>Tu código de acceso es:<br><span class="ent-code">${esc(j.codigo)}</span><br>Guárdalo bien. Tu entidad quedó <b>en revisión</b>; cuando la aprobemos, entra con ese código en “Ya tengo código”.`; }
+      const n=$('#er-nombre'); if(n) n.value='';
+    } else { toast('No se pudo registrar. Inténtalo de nuevo.'); }
+  }catch(e){ toast('No se pudo enviar. Revisa tu internet.'); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=antes; } }
+}
+/* banner discreto arriba de "Lugares" cuando estás en modo entidad */
+function updateEntBanner(){
+  const b=$('#ent-banner'); if(!b) return;
+  const e=entidad();
+  if(e&&e.codigo){ b.classList.remove('hidden'); b.innerHTML=`<span>🚑 Entidad: <b>${esc(e.nombre)}</b></span><button class="btn-mini" id="eb-open">Ver tablero</button>`; const o=$('#eb-open'); if(o) o.onclick=openEntidad; }
+  else b.classList.add('hidden');
+}
+
 /* ================= RENDER ================= */
-function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); renderDesaparecidos(); updatePending(); }
+function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); renderDesaparecidos(); updatePending(); updateEntBanner(); }
 
 let filtroDepto='__all';
 let ordenPuntos='urgencia';   // 'urgencia' | 'cercania'
@@ -483,6 +671,7 @@ function renderPuntos(){
       <span class="badge ${c==='ambar'?'rojo':c}">${LABELS[c]}</span>
       ${esMio(p)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       ${p.urgencia&&p.urgencia!=='normal'?`<span class="badge urg">${URG_LABEL[p.urgencia]}</span>`:''}
+      ${atnBadge(p)}
       <h3>${esc(p.nombre)}${p._pending?' ⏳':''}</h3>
       <div class="meta">${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} personas${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
       ${p.necesita_rescate?'<div class="tag falta" style="display:inline-block">🚨 Faltan rescatistas</div>':''}
@@ -490,6 +679,7 @@ function renderPuntos(){
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
       ${fotoSlot('puntos',p.id,p.foto,p.tiene_foto)}
       ${trustBlock(p)}
+      ${atnCtrls(p)}
       <div class="card-actions">
         <button class="btn-mini acc" data-vermapa="${p.id}">📍 Ver en el mapa</button>
         ${mine(p)?`
@@ -544,6 +734,7 @@ function renderPuntos(){
   cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Ocultar este lugar?','Se quita de la lista y del mapa, pero queda guardado (no se pierde). Se puede recuperar.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
   cont.querySelectorAll('[data-voto]').forEach(b=>b.onclick=()=>{ const i=b.dataset.voto.indexOf(':'); votar(b.dataset.voto.slice(i+1), b.dataset.voto.slice(0,i)); });
+  cont.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1), s.slice(0,i)); });
   wireFotos(cont);
 }
 
@@ -897,7 +1088,7 @@ function renderMap(){
     }
     const m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:lvl.k==='baja'?.55:.98});
     const falta=(p.faltan||[]).join(', ');
-    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${anc?' · 📍 '+esc(anc.n):''}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${anc?' · 📍 '+esc(anc.n):''}${atnPopup(p)}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
     m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,-10],className:'mk-label'});
     state.markers.addLayer(m);
     state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});
@@ -1376,6 +1567,10 @@ function boot(){
     $('#btn-guia').onclick=showWelcome;
     $('#btn-tour').onclick=showWelcome;
     if(!cache('ay_seen')) showWelcome();
+    // MODO ENTIDADES: acceso desde la tarjeta de "Ayuda" y desde el banner de "Lugares"
+    const be=$('#btn-entidad'); if(be) be.onclick=openEntidad;
+    const ec=$('#ent-close'); if(ec) ec.onclick=closeEntidad;
+    const eo=$('#entidad'); if(eo) eo.onclick=e=>{ if(e.target.id==='entidad') closeEntidad(); };
   }catch(e){ console.warn('wire-ui', e); }
 
   try{ renderAll(); }catch(e){ console.warn('renderAll', e); }
