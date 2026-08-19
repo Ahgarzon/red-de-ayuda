@@ -2,6 +2,7 @@
 /* ================= Red de Ayuda · Terremoto Colombia ================= */
 const API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-api';
 const SUG_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-sugerencia';
+const GEO_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-geo';
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
   aportes:'ay_aportes', desaparecidos:'ay_desap', avistamientos:'ay_avist',
@@ -108,10 +109,21 @@ function geoLocal(q){
     if(nn===nq) ex.push(r); else if(nn.startsWith(nq)) pre.push(r); else if(nn.includes(nq)) inc.push(r); }
   return ex.concat(pre,inc).slice(0,6).map(r=>({lat:r[2],lng:r[3],label:r[0]+', '+r[1],local:true}));
 }
-/* Geocodificar ONLINE (OSM Nominatim, gratis, con CORS) — complementa al gazetteer offline con
-   direcciones exactas (calles, barrios) cuando SÍ hay señal. */
-async function geocode(q){
+/* Geocodificar ONLINE (con señal) — complementa al gazetteer offline con direcciones exactas.
+   1) PRIMERO Google Geocoding vía webhook n8n `ayuda-geo` (la llave vive escondida en el servidor,
+      no en el navegador). Google SÍ tiene la numeración de casas y entiende el formato colombiano
+      "Cr 22 # 2A-109" que OSM/Nominatim falla. `near` = centro del mapa (lat,lng) para sesgar la
+      búsqueda hacia donde el usuario está mirando (así "carrera 22 #2-109" cae en su ciudad).
+   2) RESPALDO: OSM Nominatim (gratis, sin llave) si el webhook no responde o no encuentra. */
+async function geocode(q, near){
   q=(q||'').trim(); if(q.length<3) return [];
+  try{
+    let u=GEO_API+'?q='+encodeURIComponent(q);
+    if(near) u+='&near='+encodeURIComponent(near);
+    const r=await fetch(u);
+    if(r.ok){ const j=await r.json();
+      if(j&&Array.isArray(j.hits)&&j.hits.length) return j.hits.map(h=>({lat:+h.lat,lng:+h.lng,label:h.label,aprox:h.aprox})); }
+  }catch(e){ /* sin señal o webhook caído → cae al respaldo */ }
   const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=co&accept-language=es&q='+encodeURIComponent(q);
   try{
     const r=await fetch(url,{headers:{'Accept':'application/json'}});
@@ -1010,7 +1022,7 @@ function wireFiltros(){
   }
 }
 // Buscador del mapa: primero busca entre los lugares YA cargados (vuela a él y abre su ficha);
-// si no hay ninguno que coincida, geocodifica el texto con Nominatim y cae ahí.
+// si no hay ninguno que coincida, geocodifica el texto con Google (webhook n8n) y cae ahí.
 let searchMarker=null;
 function initMapSearch(){
   const q=document.getElementById('map-q'), res=document.getElementById('map-res');
@@ -1035,7 +1047,8 @@ function initMapSearch(){
     res.innerHTML=html+'<div class="geo-hint">Buscando dirección exacta…</div>';
     res.classList.add('on');
     wireLoc(); wireMuni();
-    const hits=await geocode(term);
+    const nearC = state.map ? (state.map.getCenter().lat+','+state.map.getCenter().lng) : (state.myPos?state.myPos.join(','):'');
+    const hits=await geocode(term, nearC);
     const geo=hits.map((h,i)=>'<button type="button" class="map-hit geo" data-geo="'+i+'">🗺️ '+esc(h.label)+'</button>').join('');
     res.innerHTML=html+(geo?'<div class="geo-hint">Dirección exacta (con señal):</div>'+geo:(locales.length||munis.length?'':'<div class="geo-hint">No encontré ese lugar. Prueba con el municipio.</div>'));
     wireLoc(); wireMuni();
@@ -1194,17 +1207,18 @@ function initPickMap(){
     if(dir&&dir.value.trim()) q.value=dir.value.trim();
     const run=async()=>{
       const term=q.value.trim(); if(term.length<2){ res.innerHTML='<div class="geo-hint">Escribe al menos 2 letras.</div>'; return; }
-      // MUNICIPIOS OFFLINE primero (no dependen de señal), luego dirección exacta con Nominatim.
+      // MUNICIPIOS OFFLINE primero (no dependen de señal), luego dirección exacta con Google (webhook).
       const munis=geoLocal(term);
       const rM=munis.map((h,i)=>'<button type="button" class="geo-hit muni" data-m="'+i+'">🏙️ '+esc(h.label)+'</button>').join('');
       res.innerHTML=(munis.length?'<div class="geo-hint">Municipios (sin internet):</div>'+rM:'')+'<div class="geo-hint">Buscando dirección exacta…</div>';
       res.querySelectorAll('.geo-hit.muni').forEach(b=>b.onclick=()=>{ const h=munis[+b.dataset.m]; setPick(h.lat,h.lng,14); res.innerHTML='<div class="geo-hint">✓ Pin en '+esc(h.label)+'. Arrástralo para afinar la calle exacta.</div>'; });
-      const hits=await geocode(term);
+      const nearP = pickMap ? (pickMap.getCenter().lat+','+pickMap.getCenter().lng) : (state.myPos?state.myPos.join(','):(lastLatLng?lastLatLng.join(','):''));
+      const hits=await geocode(term, nearP);
       if(!hits.length){ if(!munis.length) res.innerHTML='<div class="geo-hint">No encontré ese lugar. Prueba con el municipio o marca el pin a mano.</div>'; return; }
-      const rH=hits.map((h,i)=>'<button type="button" class="geo-hit" data-i="'+i+'">📍 '+esc(h.label)+'</button>').join('');
-      res.innerHTML=(munis.length?'<div class="geo-hint">Municipios (sin internet):</div>'+rM:'')+'<div class="geo-hint">Dirección exacta (con señal):</div>'+rH;
+      const rH=hits.map((h,i)=>'<button type="button" class="geo-hit" data-i="'+i+'">📍 '+esc(h.label)+(h.aprox?' <small>(aprox.)</small>':'')+'</button>').join('');
+      res.innerHTML=(munis.length?'<div class="geo-hint">Municipios (sin internet):</div>'+rM:'')+'<div class="geo-hint">Dirección (con señal):</div>'+rH;
       res.querySelectorAll('.geo-hit.muni').forEach(b=>b.onclick=()=>{ const h=munis[+b.dataset.m]; setPick(h.lat,h.lng,14); res.innerHTML='<div class="geo-hint">✓ Pin en '+esc(h.label)+'.</div>'; });
-      res.querySelectorAll('.geo-hit:not(.muni)').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.i]; setPick(h.lat,h.lng,17); res.innerHTML='<div class="geo-hint">✓ Pin ubicado. Arrástralo si necesitas afinarlo.</div>'; });
+      res.querySelectorAll('.geo-hit:not(.muni)').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.i]; setPick(h.lat,h.lng,h.aprox?16:18); res.innerHTML='<div class="geo-hint">'+(h.aprox?'✓ Pin cerca de la dirección. <b>Arrástralo</b> hasta el punto exacto.':'✓ Pin en la dirección exacta. Arrástralo si necesitas afinarlo.')+'</div>'; });
     };
     go.onclick=run;
     q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); run(); } });
