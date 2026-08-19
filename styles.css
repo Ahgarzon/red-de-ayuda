@@ -404,6 +404,9 @@ textarea{min-height:74px;resize:vertical}
 .geo-row #geo-q{flex:1;min-width:0}
 #geo-go{flex:0 0 auto;background:var(--accent-soft);color:var(--accent);border:none;border-radius:12px;
   padding:0 18px;font-weight:800;font-size:15px;cursor:pointer}
+.geo-gps{display:block;width:100%;margin-top:8px;background:#16a34a;color:#fff;border:none;border-radius:12px;
+  padding:11px 12px;font-weight:800;font-size:14px;cursor:pointer;line-height:1.3}
+.geo-gps:active{filter:brightness(.92)}
 .geo-res{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 .geo-hit{text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
   padding:10px 12px;font-size:13.5px;color:var(--text);cursor:pointer;line-height:1.35}

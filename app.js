@@ -96,8 +96,20 @@ function fmtKm(d){ if(d==null) return ''; return d<1 ? Math.round(d*1000)+' m' :
 /* Link a Google Maps con NAVEGACIÓN (Cómo llegar) hasta un punto exacto. Abre la app de mapas del celular.
    travelmode=driving evita el "no hay ruta a pie" en distancias largas (ej. Popayán→Chocó). */
 function mapsDir(lat,lng){ return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+(+lat)+','+(+lng); }
-/* Geocodificar: convierte una dirección o nombre escrito en coordenadas (OSM Nominatim, gratis, con CORS).
-   Sirve para ubicar un lugar SIN arrastrar el pin a mano — escribes "KPOPAYAN, Popayán" y cae el pin ahí. */
+/* Geocodificar OFFLINE: busca en el gazetteer de 1.122 municipios de Colombia (gazetteer.js, va
+   precargado en el service worker → funciona SIN señal). Devuelve la cabecera del municipio que
+   coincida con lo escrito. Es lo que hace que el buscador SÍ sirva sin internet: alguien en Chocó
+   escribe "San José del Palmar" y el mapa vuela ahí aunque no cargue Nominatim. */
+function norml(s){ return (s||'').toLowerCase().normalize('NFD').replace(new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g'),'').trim(); }
+function geoLocal(q){
+  const nq=norml(q); if(nq.length<2) return [];
+  const M=self.MUNICIPIOS||[]; const ex=[], pre=[], inc=[];
+  for(const r of M){ const nn=norml(r[0]);
+    if(nn===nq) ex.push(r); else if(nn.startsWith(nq)) pre.push(r); else if(nn.includes(nq)) inc.push(r); }
+  return ex.concat(pre,inc).slice(0,6).map(r=>({lat:r[2],lng:r[3],label:r[0]+', '+r[1],local:true}));
+}
+/* Geocodificar ONLINE (OSM Nominatim, gratis, con CORS) — complementa al gazetteer offline con
+   direcciones exactas (calles, barrios) cuando SÍ hay señal. */
 async function geocode(q){
   q=(q||'').trim(); if(q.length<3) return [];
   const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=co&accept-language=es&q='+encodeURIComponent(q);
@@ -1008,14 +1020,25 @@ function initMapSearch(){
     const term=q.value.trim(); if(term.length<2){ res.innerHTML=''; res.classList.remove('on'); return; }
     const nt=norm(term);
     const locales=(state._mk||[]).filter(x=>norm(x.nombre).includes(nt)||norm(x.muni).includes(nt)).slice(0,6);
-    let html=locales.map((x,i)=>'<button type="button" class="map-hit" data-loc="'+i+'">📍 <b>'+esc(x.nombre)+'</b><span>'+esc(x.muni)+'</span></button>').join('');
-    res.innerHTML=html+'<div class="geo-hint">Buscando también en el mapa de Colombia…</div>';
+    // MUNICIPIOS OFFLINE (gazetteer): siempre disponibles, no dependen de la señal.
+    const munis=geoLocal(term);
+    const renderLoc=()=>locales.map((x,i)=>'<button type="button" class="map-hit" data-loc="'+i+'">📍 <b>'+esc(x.nombre)+'</b><span>'+esc(x.muni)+'</span></button>').join('');
+    const renderMuni=()=>(munis.length?'<div class="geo-hint">Municipios (funciona sin internet):</div>'+munis.map((h,i)=>'<button type="button" class="map-hit muni" data-muni="'+i+'">🏙️ '+esc(h.label)+'</button>').join(''):'');
+    const wireLoc=()=>res.querySelectorAll('.map-hit[data-loc]').forEach(b=>b.onclick=()=>{ const x=locales[+b.dataset.loc]; userMoved=true; state.map.setView([x.lat,x.lng],16); if(x.m&&x.m.openPopup) x.m.openPopup(); closeSearch(); });
+    const flyGeo=h=>{ userMoved=true; state.map.setView([h.lat,h.lng],h.local?13:16);
+      if(searchMarker) state.map.removeLayer(searchMarker);
+      searchMarker=L.marker([h.lat,h.lng],{icon:pinIcon('#111','🔎')}).addTo(state.map);
+      searchMarker.bindPopup('<b>'+esc(h.label)+'</b><br><a href="'+mapsDir(h.lat,h.lng)+'" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>').openPopup();
+      closeSearch(); };
+    const wireMuni=()=>res.querySelectorAll('.map-hit.muni').forEach(b=>b.onclick=()=>flyGeo(munis[+b.dataset.muni]));
+    let html=renderLoc()+renderMuni();
+    res.innerHTML=html+'<div class="geo-hint">Buscando dirección exacta…</div>';
     res.classList.add('on');
-    res.querySelectorAll('.map-hit').forEach(b=>b.onclick=()=>{ const x=locales[+b.dataset.loc]; userMoved=true; state.map.setView([x.lat,x.lng],16); if(x.m&&x.m.openPopup) x.m.openPopup(); closeSearch(); });
+    wireLoc(); wireMuni();
     const hits=await geocode(term);
     const geo=hits.map((h,i)=>'<button type="button" class="map-hit geo" data-geo="'+i+'">🗺️ '+esc(h.label)+'</button>').join('');
-    res.innerHTML=html+(geo?'<div class="geo-hint">Otros lugares (Google/OSM):</div>'+geo:(locales.length?'':'<div class="geo-hint">No encontré ese lugar.</div>'));
-    res.querySelectorAll('.map-hit:not(.geo)').forEach(b=>b.onclick=()=>{ const x=locales[+b.dataset.loc]; userMoved=true; state.map.setView([x.lat,x.lng],16); if(x.m&&x.m.openPopup) x.m.openPopup(); closeSearch(); });
+    res.innerHTML=html+(geo?'<div class="geo-hint">Dirección exacta (con señal):</div>'+geo:(locales.length||munis.length?'':'<div class="geo-hint">No encontré ese lugar. Prueba con el municipio.</div>'));
+    wireLoc(); wireMuni();
     res.querySelectorAll('.map-hit.geo').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.geo]; userMoved=true; state.map.setView([h.lat,h.lng],16);
       if(searchMarker) state.map.removeLayer(searchMarker);
       searchMarker=L.marker([h.lat,h.lng],{icon:pinIcon('#111','🔎')}).addTo(state.map);
@@ -1155,19 +1178,33 @@ function initPickMap(){
   if(!el.parentNode.querySelector('#geo-search')){
     const box=document.createElement('div');
     box.id='geo-search'; box.className='geo-search';
-    box.innerHTML='<div class="geo-row"><input id="geo-q" type="search" placeholder="🔎 Escribe la dirección o el lugar (ej: KPOPAYAN, Popayán)"><button type="button" id="geo-go">Buscar</button></div><div id="geo-res" class="geo-res"></div>';
+    box.innerHTML='<div class="geo-row"><input id="geo-q" type="search" placeholder="🔎 Escribe la dirección o el municipio (ej: San José del Palmar)"><button type="button" id="geo-go">Buscar</button></div>'
+      +'<button type="button" id="geo-gps" class="geo-gps">📍 Usar mi ubicación (GPS) — funciona sin internet</button>'
+      +'<div id="geo-res" class="geo-res"></div>';
     el.parentNode.insertBefore(box, el);
-    const q=box.querySelector('#geo-q'), go=box.querySelector('#geo-go'), res=box.querySelector('#geo-res');
+    const q=box.querySelector('#geo-q'), go=box.querySelector('#geo-go'), res=box.querySelector('#geo-res'), gps=box.querySelector('#geo-gps');
+    // BOTÓN GPS: marca el punto en la ubicación real del celular SIN depender de que el mapa cargue.
+    // Es la vía honesta para alguien sin señal en el terreno: el GPS no necesita internet.
+    gps.onclick=()=>{ if(!navigator.geolocation){ res.innerHTML='<div class="geo-hint">Este celular no permite ubicación.</div>'; return; }
+      res.innerHTML='<div class="geo-hint">Tomando tu ubicación…</div>';
+      navigator.geolocation.getCurrentPosition(p=>{ setPick(p.coords.latitude,p.coords.longitude,17); res.innerHTML='<div class="geo-hint">✓ Punto en tu ubicación. Arrástralo si necesitas afinarlo.</div>'; },
+        ()=>{ res.innerHTML='<div class="geo-hint">No pude tomar el GPS. Permite la ubicación o marca el pin a mano.</div>'; }, {enableHighAccuracy:true,timeout:10000,maximumAge:30000}); };
     // Si el formulario ya tiene una dirección escrita, la ofrece como búsqueda de un toque
     const dir=document.querySelector('#modal input[name="direccion"]');
     if(dir&&dir.value.trim()) q.value=dir.value.trim();
     const run=async()=>{
-      const term=q.value.trim(); if(term.length<3){ res.innerHTML='<div class="geo-hint">Escribe al menos 3 letras.</div>'; return; }
-      res.innerHTML='<div class="geo-hint">Buscando…</div>';
+      const term=q.value.trim(); if(term.length<2){ res.innerHTML='<div class="geo-hint">Escribe al menos 2 letras.</div>'; return; }
+      // MUNICIPIOS OFFLINE primero (no dependen de señal), luego dirección exacta con Nominatim.
+      const munis=geoLocal(term);
+      const rM=munis.map((h,i)=>'<button type="button" class="geo-hit muni" data-m="'+i+'">🏙️ '+esc(h.label)+'</button>').join('');
+      res.innerHTML=(munis.length?'<div class="geo-hint">Municipios (sin internet):</div>'+rM:'')+'<div class="geo-hint">Buscando dirección exacta…</div>';
+      res.querySelectorAll('.geo-hit.muni').forEach(b=>b.onclick=()=>{ const h=munis[+b.dataset.m]; setPick(h.lat,h.lng,14); res.innerHTML='<div class="geo-hint">✓ Pin en '+esc(h.label)+'. Arrástralo para afinar la calle exacta.</div>'; });
       const hits=await geocode(term);
-      if(!hits.length){ res.innerHTML='<div class="geo-hint">No encontré ese lugar. Prueba con la ciudad (ej: “Cra 9, Popayán”) o marca el pin a mano.</div>'; return; }
-      res.innerHTML=hits.map((h,i)=>'<button type="button" class="geo-hit" data-i="'+i+'">📍 '+esc(h.label)+'</button>').join('');
-      res.querySelectorAll('.geo-hit').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.i]; setPick(h.lat,h.lng,17); res.innerHTML='<div class="geo-hint">✓ Pin ubicado. Arrástralo si necesitas afinarlo.</div>'; });
+      if(!hits.length){ if(!munis.length) res.innerHTML='<div class="geo-hint">No encontré ese lugar. Prueba con el municipio o marca el pin a mano.</div>'; return; }
+      const rH=hits.map((h,i)=>'<button type="button" class="geo-hit" data-i="'+i+'">📍 '+esc(h.label)+'</button>').join('');
+      res.innerHTML=(munis.length?'<div class="geo-hint">Municipios (sin internet):</div>'+rM:'')+'<div class="geo-hint">Dirección exacta (con señal):</div>'+rH;
+      res.querySelectorAll('.geo-hit.muni').forEach(b=>b.onclick=()=>{ const h=munis[+b.dataset.m]; setPick(h.lat,h.lng,14); res.innerHTML='<div class="geo-hint">✓ Pin en '+esc(h.label)+'.</div>'; });
+      res.querySelectorAll('.geo-hit:not(.muni)').forEach(b=>b.onclick=()=>{ const h=hits[+b.dataset.i]; setPick(h.lat,h.lng,17); res.innerHTML='<div class="geo-hint">✓ Pin ubicado. Arrástralo si necesitas afinarlo.</div>'; });
     };
     go.onclick=run;
     q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); run(); } });
