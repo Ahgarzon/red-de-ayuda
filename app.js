@@ -503,6 +503,9 @@ function renderEntregas(){
 }
 
 let segDonar='fuentes';
+function hoyISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function acopioCerrado(f){ return f && f.tipo==='recoleccion' && f.fecha_limite && String(f.fecha_limite).slice(0,10) < hoyISO(); }
+function fmtFechaCorta(s){ try{ const p=String(s).slice(0,10).split('-'); return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('es-CO',{day:'numeric',month:'long'}); }catch(e){ return s; } }
 function renderFuentes(){
   const cont=$('#lista-fuentes');
   const fuentes=vivos('fuentes');
@@ -518,9 +521,11 @@ function renderFuentes(){
     return `<div class="card ${acopio?'acopio':(f.verificada?'verde':'')}">
       <span class="badge ${acopio?'acopio':(f.verificada?'verde':'rojo')}">${acopio?'🏬 Centro de acopio':(f.verificada?'Verificada':'Sin verificar')}</span>
       ${esMio(f)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
+      ${acopio&&acopioCerrado(f)?'<span class="badge rojo">Cerrado</span>':''}
       <h3>${esc(f.nombre)}${f._pending?' ⏳':''}</h3>
       <div class="meta">${acopio?'Donar cosas (ropa, comida, colchones…)':'🏦 Cuenta bancaria'}${f.destino?' · 🚚 va a '+esc(f.destino):''}${dist!=null?' · <b>a '+fmtKm(dist)+'</b>':''}</div>
-      ${acopio&&nec.length?`<div class="tags" style="margin-top:8px"><b style="font-size:.92em;color:#7c3aed;margin-right:4px">Necesitan:</b>${nec.map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('')}</div>`:''}
+      ${acopio&&nec.length&&!acopioCerrado(f)?`<div class="tags" style="margin-top:8px"><b style="font-size:.92em;color:#7c3aed;margin-right:4px">Necesitan:</b>${nec.map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('')}</div>`:''}
+      ${acopio&&f.fecha_limite?`<div class="meta" style="margin-top:6px;color:${acopioCerrado(f)?'#b91c1c':'#7c3aed'}"><b>${acopioCerrado(f)?'⏰ Cerrado — venció el ':'⏰ Recibe hasta el '}${fmtFechaCorta(f.fecha_limite)}</b></div>`:''}
       ${acopio&&f.direccion?`<div class="meta" style="margin-top:6px">📍 Llevar a: ${esc(f.direccion)}</div>`:''}
       ${f.numero_cuenta?`<div class="acct"><span>${esc(f.banco?f.banco+' ':'')}${esc(f.numero_cuenta)}</span><button class="btn-mini" data-copy="${esc(f.numero_cuenta)}">Copiar</button></div>`:''}
       ${f.titular?`<div class="meta" style="margin-top:6px">Titular: ${esc(f.titular)}</div>`:''}
@@ -778,8 +783,9 @@ function renderMap(){
   vivos('fuentes').forEach(f=>{
     if(f.tipo!=='recoleccion' || f.lat==null || f.lng==null) return;
     const nec=(f.necesita||[]).join(', ');
-    const m=L.marker([f.lat,f.lng],{icon:pinIcon('#7c3aed','🏬')});
-    m.bindPopup(`<b>🏬 ${esc(f.nombre)}</b><br>Centro de acopio${f.destino?' · va a '+esc(f.destino):''}${f.direccion?'<br>📍 '+esc(f.direccion):''}${nec?'<br><b>Necesitan:</b> '+esc(nec):''}<br><a href="${mapsDir(f.lat,f.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    const cerrado=acopioCerrado(f);
+    const m=L.marker([f.lat,f.lng],{icon:pinIcon(cerrado?'#9ca3af':'#7c3aed','🏬')});
+    m.bindPopup(`<b>🏬 ${esc(f.nombre)}</b>${cerrado?' <span style="color:#b91c1c">(cerrado)</span>':''}<br>Centro de acopio${f.destino?' · va a '+esc(f.destino):''}${f.fecha_limite?'<br>⏰ '+(cerrado?'Cerró el ':'Recibe hasta el ')+esc(fmtFechaCorta(f.fecha_limite)):''}${f.direccion?'<br>📍 '+esc(f.direccion):''}${nec&&!cerrado?'<br><b>Necesitan:</b> '+esc(nec):''}<br><a href="${mapsDir(f.lat,f.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
     m.bindTooltip(esc(f.nombre),{permanent:true,direction:'top',offset:[0,-30],className:'mk-label mk-label-acopio'});
     state.markers.addLayer(m);
     state._mk.push({nombre:f.nombre,muni:f.direccion||f.destino||'Centro de acopio',lat:f.lat,lng:f.lng,m});
@@ -970,6 +976,14 @@ function openForm(kind, prefill={}, editId=null){
         <div id="pickmap"></div>
         <div class="help" id="gps-info">Toca el mapa o arrastra el pin para marcar el centro de acopio.</div>
         <button type="button" class="gps-btn" id="gps">📍 Usar mi ubicación (GPS)</button>
+        <label>¿Hasta cuándo reciben? (fecha de cierre)</label>
+        <input type="date" name="fecha_limite" value="${esc((P.fecha_limite||'').toString().slice(0,10))}">
+        <div class="help">Así la gente sabe hasta cuándo llevar cosas y no manda de más cuando el punto ya cerró.</div>
+        <label>WhatsApp de quien coordina *</label>
+        <input name="whatsapp" inputmode="tel" placeholder="Ej: 300 123 4567" value="${esc(P.whatsapp||'')}">
+        <label>Correo (para recordarte actualizar y cerrar el punto)</label>
+        <input type="email" name="email" placeholder="tucorreo@ejemplo.com" value="${esc(P.email||'')}">
+        <div class="help">Te enviaremos un recordatorio para que actualices qué falta (ej: “ya llegaron pañales, no envíen más”) o cierres el punto cuando termine.</div>
       </div>
 
       <label>¿A dónde va la ayuda? (destino del envío)</label><input name="destino" placeholder="Ej: Chocó, Cali, Buenaventura…" value="${esc(P.destino||'')}">
@@ -1101,11 +1115,14 @@ function submitForm(kind){
     data={ lugar:g('lugar'), quien_entrego:g('quien_entrego'), items:g('items'), foto:currentPhoto||null, tiene_foto: !!currentPhoto, lat:gps.lat, lng:gps.lng, recibido:false };
   } else if(kind==='fuente'){
     if(!g('nombre')) return toast('Falta el nombre');
-    table='fuentes';
     const esAcopio=g('tipo')==='recoleccion';
+    if(esAcopio && !g('whatsapp')) return toast('Deja el WhatsApp de quien coordina el acopio');
+    table='fuentes';
     data={ nombre:g('nombre'), tipo:g('tipo'), banco:g('banco'), numero_cuenta:g('numero_cuenta'),
       titular:g('titular'), destino:g('destino'), contacto:g('contacto'), nota:g('nota'), verificada:false,
       necesita: esAcopio?readMulti('necesita'):null, direccion: esAcopio?g('direccion'):null,
+      fecha_limite: esAcopio?(g('fecha_limite')||null):null,
+      whatsapp: esAcopio?(g('whatsapp')||null):null, email: esAcopio?(g('email')||null):null,
       lat: esAcopio?gps.lat:null, lng: esAcopio?gps.lng:null };
   } else if(kind==='aporte'){
     table='aportes';
