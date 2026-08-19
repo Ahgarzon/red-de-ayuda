@@ -77,7 +77,7 @@ body{
 /* Leyenda: arriba-izquierda, DEBAJO del control de zoom (+/-). Así el botón flotante
    de abajo (＋ Avisar) nunca la tapa, en ningún tamaño de pantalla. */
 .map-legend{
-  position:absolute;left:8px;top:96px;bottom:auto;z-index:500;background:rgba(255,255,255,.96);
+  position:absolute;left:8px;top:120px;bottom:auto;z-index:500;background:rgba(255,255,255,.96);
   border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);max-width:62vw;
   padding:9px 11px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text)
 }
@@ -91,6 +91,21 @@ body{
   display:flex;align-items:center;justify-content:center;cursor:pointer
 }
 .map-ctrls button:active{transform:scale(.94)}
+/* FILTROS DEL MAPA: barra de chips bajo el buscador para mostrar/ocultar cada tipo y ver solo lo que falta.
+   Chip lleno = ese tipo se está viendo; chip apagado = oculto. Así el mapa no se satura. */
+.map-filtros{position:absolute;top:66px;left:56px;right:66px;z-index:640;display:flex;gap:6px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;
+  padding-bottom:2px;scrollbar-width:none}
+.map-filtros::-webkit-scrollbar{display:none}
+.mf-chip,.mf-sel{flex:none;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap;
+  padding:8px 13px;box-shadow:var(--shadow);cursor:pointer;line-height:1;
+  border:1px solid var(--border);background:rgba(255,255,255,.75);color:var(--text-soft)}
+.mf-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.mf-sel{-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.98);
+  padding-right:26px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'><path d='M1 1l4 4 4-4' fill='none' stroke='%23667' stroke-width='1.6'/></svg>");
+  background-repeat:no-repeat;background-position:right 10px center}
+.map-filtros.filtrando .mf-sel{background-color:var(--accent);color:#fff;border-color:var(--accent);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'><path d='M1 1l4 4 4-4' fill='none' stroke='white' stroke-width='1.6'/></svg>")}
 .sw{width:15px;height:15px;border-radius:50%;display:inline-block;flex:none}
 .sw.rojo{background:var(--rojo)}.sw.ambar{background:var(--ambar)}
 .sw.verde{background:var(--verde)}.sw.rescate{background:var(--rescate)}

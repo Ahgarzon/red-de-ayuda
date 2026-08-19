@@ -9,7 +9,9 @@ const LS = {
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], desaparecidos:[], avistamientos:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[] };
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], desaparecidos:[], avistamientos:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[],
+  // FILTROS DEL MAPA: para que no se sature. Cada categoría se puede ocultar; 'item' filtra por lo que se necesita.
+  filtros:{ puntos:true, acopios:true, entregas:true, item:'' } };
 
 /* ---------- util ---------- */
 const $ = s => document.querySelector(s);
@@ -782,10 +784,27 @@ function initMap(){
   if(bl) bl.onclick=()=>locateMe(true);
   if(bf) bf.onclick=()=>{ userMoved=false; mapFitDone=false; fitToPoints(); };
   if(ba) ba.onclick=()=>{ state.showAnclas = (state.showAnclas===false); ba.classList.toggle('off', state.showAnclas===false); renderMap(); };
+  wireFiltros();
   initMapSearch();
   // ubicar al usuario suave al abrir (sin forzar si ya movió)
   locateMe(false);
   renderMap();
+}
+// FILTROS DEL MAPA (para que no se sature): chips que muestran/ocultan cada tipo de punto y un
+// selector para ver solo los que necesitan/piden un item (agua, pañales, etc.). Todo activo por defecto.
+function wireFiltros(){
+  const bar=document.getElementById('map-filtros'); if(!bar) return;
+  bar.querySelectorAll('.mf-chip[data-f]').forEach(ch=>{
+    const k=ch.dataset.f;
+    ch.classList.toggle('active', state.filtros[k]!==false);
+    ch.onclick=()=>{ state.filtros[k]=!(state.filtros[k]!==false); ch.classList.toggle('active', state.filtros[k]!==false); renderMap(); };
+  });
+  const sel=document.getElementById('map-item');
+  if(sel && !sel.dataset.built){
+    sel.dataset.built='1';
+    sel.innerHTML='<option value="">Todo lo que falta</option>'+ITEMS.map(i=>'<option value="'+i+'">Solo: '+i+'</option>').join('');
+    sel.onchange=()=>{ state.filtros.item=sel.value; bar.classList.toggle('filtrando', !!sel.value); renderMap(); };
+  }
 }
 // Buscador del mapa: primero busca entre los lugares YA cargados (vuela a él y abre su ficha);
 // si no hay ninguno que coincida, geocodifica el texto con Nominatim y cae ahí.
@@ -863,8 +882,12 @@ function renderMap(){
   state.markers.clearLayers();
   state._mk=[];  // índice nombre→marcador para el buscador del mapa
   const cols={rojo:'#e0322f',ambar:'#e08608',verde:'#16a34a',rescate:'#db2777'};
-  vivos('puntos').forEach(p=>{
+  const F=state.filtros||{}, fItem=F.item||'';
+  // ¿un punto de necesidad cae dentro del filtro por item? (lo que le falta, o rescatistas)
+  const puntoMatchItem=p=> !fItem || (p.faltan||[]).includes(fItem) || (fItem==='Rescatistas' && p.necesita_rescate);
+  if(F.puntos!==false) vivos('puntos').forEach(p=>{
     if(p.lat==null||p.lng==null) return;
+    if(!puntoMatchItem(p)) return;
     const c=color(p);
     const lvl=trustLevel(p), anc=anclaDe(p);
     // ARO DE CONFIANZA (eje aparte del semáforo): verde=confiable, rojo punteado=dudoso.
@@ -879,7 +902,8 @@ function renderMap(){
     state.markers.addLayer(m);
     state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});
   });
-  vivos('entregas').forEach(e=>{
+  // Entregas: se ocultan si su categoría está apagada, o si hay un filtro por item activo (no son "necesidades").
+  if(F.entregas!==false && !fItem) vivos('entregas').forEach(e=>{
     if(e.lat==null||e.lng==null) return;
     const m=L.marker([e.lat,e.lng],{icon:pinIcon('#2563eb','📦')});
     m.bindPopup(`<b>📦 ${esc(e.lugar||'Entrega')}</b><br>${esc(e.items||'')}<br>${e.recibido?'Recibido ✓':'En camino'}<br><a href="${mapsDir(e.lat,e.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
@@ -887,8 +911,9 @@ function renderMap(){
     state._mk.push({nombre:e.lugar||'Entrega',muni:e.items||'',lat:e.lat,lng:e.lng,m});
   });
   // Centros de acopio (donaciones físicas): marca morada con caja; muestra qué necesitan
-  vivos('fuentes').forEach(f=>{
+  if(F.acopios!==false) vivos('fuentes').forEach(f=>{
     if(f.tipo!=='recoleccion' || f.lat==null || f.lng==null) return;
+    if(fItem && !(f.necesita||[]).includes(fItem)) return;  // filtro por item: solo acopios que piden eso
     const nec=(f.necesita||[]).join(', ');
     const cerrado=acopioCerrado(f);
     const m=L.marker([f.lat,f.lng],{icon:pinIcon(cerrado?'#9ca3af':'#7c3aed','🏬')});
@@ -900,7 +925,7 @@ function renderMap(){
   // ANCLAS DE CONFIANZA: zonas urbanas con instituciones (hospital, alcaldía, Cruz Roja,
   // bomberos, policía, universidades). Se dibuja un halo suave = radio de confianza. Los
   // puntos que nacen dentro arrancan con más confianza. Se pueden ocultar con el botón 🏛️.
-  if(state.showAnclas!==false){
+  if(state.showAnclas!==false && !fItem){
     ANCLAS.forEach(a=>{
       state.markers.addLayer(L.circle([a.lat,a.lng],{radius:a.r*1000,color:'#0ea5e9',weight:1,opacity:.35,fillColor:'#0ea5e9',fillOpacity:.06,interactive:false}));
       const m=L.marker([a.lat,a.lng],{icon:pinIcon('#0ea5e9','🏛️')});
