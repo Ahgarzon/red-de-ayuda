@@ -402,3 +402,28 @@ textarea{min-height:74px;resize:vertical}
 
 /* ===== "Cómo llegar" dentro de los globos del mapa ===== */
 .popup-go{display:inline-block;margin-top:7px;color:#1a73e8;font-weight:800;text-decoration:none;font-size:14px}
+
+/* ================= CONFIANZA (anclas + votos de la comunidad) ================= */
+/* Eje aparte del semáforo: no cambia el color de "qué falta", suma un sello + medidor. */
+.trust{margin:10px 0 2px;padding:10px 11px;border:1px solid var(--border);border-radius:13px;background:var(--surface-2)}
+.trust-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.trust-badge{font-weight:800;font-size:13.5px;display:inline-flex;align-items:center;gap:4px}
+.trust-ancla{font-size:12px;color:var(--text-soft);font-weight:700;background:#e0f2fe;border:1px solid #bae6fd;color:#0369a1;border-radius:999px;padding:3px 9px}
+.trust-meter{height:8px;border-radius:6px;background:#e6e8f2;overflow:hidden;margin-bottom:9px}
+.trust-meter i{display:block;height:100%;border-radius:6px;transition:width .3s ease}
+.trust-votes{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tv{flex:1;min-width:120px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+  padding:11px 10px;font-size:14.5px;font-weight:800;color:var(--text);cursor:pointer}
+.tv:active{transform:scale(.96)}
+.tv.confia.on{background:#dcfce7;border-color:#16a34a;color:#15803d}
+.tv.duda.on{background:#fee2e2;border-color:#dc2626;color:#b91c1c}
+.trust-count{font-size:13.5px;font-weight:800;color:var(--text-soft)}
+/* Lugar marcado "Dudoso" por la comunidad: se atenúa (no se borra) y baja en la lista */
+.card.dudoso{opacity:.72}
+.card.dudoso .trust{border-color:#fecaca;background:#fff5f5}
+/* swatches de la leyenda del mapa */
+.sw.ring-ok{background:transparent;border:3px solid #16a34a}
+.sw.ring-bad{background:transparent;border:3px dashed #dc2626}
+.sw.ancla{background:rgba(14,165,233,.18);border:1px solid #0ea5e9}
+/* botón de anclas apagado */
+#btn-anclas.off{opacity:.5}

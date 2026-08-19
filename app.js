@@ -119,6 +119,98 @@ function urgScore(p){
 }
 const URG_LABEL={critica:'🔴 Crítico',alta:'🟠 Urgente',normal:'Normal'};
 
+/* ================= CONFIANZA (idea de Angel) =================
+   DOS ejes independientes del semáforo (rojo/verde = qué falta):
+   1) ANCLAS: zonas urbanas con instituciones (hospital, alcaldía, Cruz Roja, bomberos,
+      policía, universidades). Un punto que NACE dentro del radio de un ancla arranca con
+      más confianza ("cerca de zona segura"). Van EN EL CÓDIGO para funcionar SIN internet.
+   2) VOTOS de la comunidad: cada dispositivo puede marcar un lugar "confío 👍" o "dudoso 👎"
+      (1 voto por lugar). El saldo sube o baja la confianza; los muy dudosos se bajan y se
+      atenúan (no se borran: borrar por votos es manipulable). El voto está TOPADO (±4) para
+      que nadie infle/hunda un punto votando en masa, y el ancla pesa por encima del ruido. */
+const ANCLAS = [
+  {n:'Casco urbano de Popayán', t:'ciudad', lat:2.4448, lng:-76.6060, r:3.5},
+  {n:'Casco urbano de Cali', t:'ciudad', lat:3.4372, lng:-76.5225, r:6},
+  {n:'Casco urbano de Palmira', t:'ciudad', lat:3.5297, lng:-76.3036, r:3},
+  {n:'Casco urbano de Jamundí', t:'ciudad', lat:3.2608, lng:-76.5386, r:3},
+  {n:'Casco urbano de Buenaventura', t:'ciudad', lat:3.8801, lng:-77.0313, r:4},
+  {n:'Casco urbano de Quibdó', t:'ciudad', lat:5.6919, lng:-76.6583, r:4},
+  {n:'Casco urbano de Istmina', t:'ciudad', lat:5.1596, lng:-76.6849, r:2.5},
+  {n:'Casco urbano de Tumaco', t:'ciudad', lat:1.7930, lng:-78.8140, r:3},
+  {n:'Casco urbano de Pasto', t:'ciudad', lat:1.2136, lng:-77.2811, r:4},
+  {n:'Casco urbano de Santander de Quilichao', t:'ciudad', lat:3.0097, lng:-76.4848, r:3},
+  {n:'Casco urbano de Timbío', t:'ciudad', lat:2.3540, lng:-76.6850, r:2.5},
+  {n:'Casco urbano de Piendamó', t:'ciudad', lat:2.6398, lng:-76.5333, r:2.5},
+  {n:'Casco urbano de El Tambo (Cauca)', t:'ciudad', lat:2.4520, lng:-76.8110, r:2.5},
+  {n:'Casco urbano de Silvia', t:'ciudad', lat:2.6120, lng:-76.3800, r:2.5},
+  {n:'Casco urbano de Guapi', t:'ciudad', lat:2.5710, lng:-77.8870, r:2.5}
+];
+/* ancla más cercana cuyo radio cubre esa ubicación (o null) */
+function anclaCerca(lat,lng){
+  if(lat==null||lng==null) return null;
+  let best=null, bd=1e9;
+  for(const a of ANCLAS){ const d=distKm([+lat,+lng],[a.lat,a.lng]); if(d!=null && d<=a.r && d<bd){ bd=d; best=a; } }
+  return best;
+}
+/* ancla de un punto: la guardada al crearlo, o la calculada en vivo (para los puntos viejos
+   creados antes de esta versión, que se benefician al instante sin migrar la base). */
+function anclaDe(p){
+  if(!p) return null;
+  if(p._anc!==undefined) return p._anc;
+  let a=null;
+  if(p.cerca_ancla && p.ancla_nombre) a={n:p.ancla_nombre, t:p.ancla_tipo||'ciudad'};
+  else { const x=anclaCerca(p.lat,p.lng); if(x) a={n:x.n, t:x.t}; }
+  return (p._anc=a);
+}
+/* puntaje de confianza = base por ancla + saldo de votos (topado ±4) */
+function trustScore(p){
+  const c=(+p.votos_confia||0), d=(+p.votos_duda||0);
+  const base = anclaDe(p)?2:0;
+  return base + Math.max(-4, Math.min(4, c-d));
+}
+/* nivel visible (independiente del semáforo): alta / media / baja */
+function trustLevel(p){
+  const c=(+p.votos_confia||0), d=(+p.votos_duda||0), net=c-d, s=trustScore(p);
+  if(d>=3 && net<=-3) return {k:'baja', txt:'Dudoso', ico:'⚠️', col:'#dc2626'};
+  if(s>=3) return {k:'alta', txt:'Confiable', ico:'🛡️', col:'#16a34a'};
+  return {k:'media', txt:'Sin confirmar', ico:'•', col:'#94a3b8'};
+}
+/* % para la barrita de confianza (5–100) */
+function trustPct(p){ return Math.max(5, Math.min(100, Math.round(50 + trustScore(p)*12))); }
+/* comparador: los lugares marcados "Dudoso" por la comunidad van al final de la lista
+   (bajándolos, como pidió Angel) — nunca se borran, solo se hunden y se atenúan. */
+function dudoRank(x,y){ return (trustLevel(x).k==='baja'?1:0)-(trustLevel(y).k==='baja'?1:0); }
+/* ¿este dispositivo ya votó este lugar? devuelve 'confia'|'duda'|null */
+function yaVote(id){ return cache('ay_voto_'+id)||null; }
+/* Votar un lugar: 1 voto por dispositivo. Suma al contador del punto (optimista/offline)
+   y deja un registro de auditoría en ayuda_votos (índice único punto+device en la base). */
+async function votar(id, valor){
+  const prev=yaVote(id);
+  if(prev){ toast(prev===valor?'Ya diste tu opinión aquí 🙂':'Ya votaste este lugar; no se puede cambiar.'); return; }
+  const p=state.puntos.find(x=>String(x.id)===String(id)); if(!p) return;
+  cache('ay_voto_'+id, valor);                                  // dedupe local inmediato
+  const campo = valor==='confia' ? 'votos_confia' : 'votos_duda';
+  const nuevo = (+p[campo]||0)+1;
+  // auditoría en la base (no bloquea; si falla por doble voto o sin señal, no importa)
+  try{ api('insert','votos',{data:{punto_id:String(id), device:ME, valor}}); }catch(e){}
+  update('puntos', id, {[campo]:nuevo});                        // contador + re-render
+  toast(valor==='confia' ? '¡Gracias! Marcaste este lugar como confiable 👍' : 'Gracias, lo marcaste como dudoso 👀');
+}
+/* bloque de confianza para la tarjeta de un lugar */
+function trustBlock(p){
+  const lvl=trustLevel(p), anc=anclaDe(p), yo=yaVote(p.id), pct=trustPct(p);
+  const votos = esMio(p)
+    ? `<span class="trust-count">👍 ${(+p.votos_confia||0)} · 👎 ${(+p.votos_duda||0)}</span>`
+    : `<button class="tv confia${yo==='confia'?' on':''}" data-voto="confia:${p.id}">👍 Confío${(+p.votos_confia)?' · '+p.votos_confia:''}</button>
+       <button class="tv duda${yo==='duda'?' on':''}" data-voto="duda:${p.id}">👎 Dudoso${(+p.votos_duda)?' · '+p.votos_duda:''}</button>`;
+  return `<div class="trust ${lvl.k}">
+    <div class="trust-top"><span class="trust-badge" style="color:${lvl.col}">${lvl.ico} ${lvl.txt}</span>
+    ${anc?`<span class="trust-ancla">📍 ${esc(anc.n)}</span>`:''}</div>
+    <div class="trust-meter"><i style="width:${pct}%;background:${lvl.col}"></i></div>
+    <div class="trust-votes">${votos}</div>
+  </div>`;
+}
+
 /* ---------- backend ---------- */
 async function api(action, table, extra={}){
   const body = Object.assign({action, table}, extra);
@@ -384,7 +476,8 @@ function renderPuntos(){
     const dist = (state.myPos && p.lat!=null) ? distKm(state.myPos,[p.lat,p.lng]) : null;
     const falta=(p.faltan||[]).map(t=>`<span class="tag falta">− ${esc(t)}</span>`).join('');
     const sobra=(p.sobran||[]).map(t=>`<span class="tag sobra">+ ${esc(t)}</span>`).join('');
-    return `<div class="card ${c}">
+    const dudoso=trustLevel(p).k==='baja';
+    return `<div class="card ${c}${dudoso?' dudoso':''}">
       <span class="badge ${c==='ambar'?'rojo':c}">${LABELS[c]}</span>
       ${esMio(p)?'<span class="badge tuyo">✍️ Tú lo creaste</span>':''}
       ${p.urgencia&&p.urgencia!=='normal'?`<span class="badge urg">${URG_LABEL[p.urgencia]}</span>`:''}
@@ -394,6 +487,7 @@ function renderPuntos(){
       <div class="tags">${falta}${sobra||(!falta?'<span class="tag plain">sin detalle</span>':'')}</div>
       ${p.nota?`<div class="meta" style="margin-top:8px">“${esc(p.nota)}”</div>`:''}
       ${fotoSlot('puntos',p.id,p.foto,p.tiene_foto)}
+      ${trustBlock(p)}
       <div class="card-actions">
         <button class="btn-mini acc" data-vermapa="${p.id}">📍 Ver en el mapa</button>
         ${mine(p)?`
@@ -424,7 +518,7 @@ function renderPuntos(){
       return `<div class="zona-depto">
         <div class="zona-h">📍 ${esc(d)}<span class="zona-count">${todos.length} lugar${todos.length!==1?'es':''}${need?' · '+need+' necesita'+(need!==1?'n':''):''}</span></div>
         ${muniNames.map(m=>`<div class="zona-muni">${esc(m)}</div>`+
-          munis[m].sort((x,y)=>mioFirst(x,y)||urgScore(y)-urgScore(x)).map(cardPunto).join('')).join('')}
+          munis[m].sort((x,y)=>mioFirst(x,y)||dudoRank(x,y)||urgScore(y)-urgScore(x)).map(cardPunto).join('')).join('')}
       </div>`;
     }).join('');
   } else {
@@ -432,12 +526,13 @@ function renderPuntos(){
     if(ordenPuntos==='cercania' && state.myPos){
       list.sort((x,y)=>{
         const m=mioFirst(x,y); if(m) return m;      // lo tuyo de primero
+        const dd=dudoRank(x,y); if(dd) return dd;    // los dudosos, al final
         const dx=x.lat!=null?distKm(state.myPos,[x.lat,x.lng]):1e9;
         const dy=y.lat!=null?distKm(state.myPos,[y.lat,y.lng]):1e9;
         return dx-dy;
       });
     } else {
-      list.sort((x,y)=>mioFirst(x,y)||urgScore(y)-urgScore(x));  // lo tuyo, luego mayor urgencia
+      list.sort((x,y)=>mioFirst(x,y)||dudoRank(x,y)||urgScore(y)-urgScore(x));  // tuyo, luego confiables, luego urgencia
     }
     cont.innerHTML = list.map(cardPunto).join('');
   }
@@ -446,6 +541,7 @@ function renderPuntos(){
   cont.querySelectorAll('[data-editp]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.editp);if(p)openForm('punto',p,p.id);});
   cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askConfirm('¿Ocultar este lugar?','Se quita de la lista y del mapa, pero queda guardado (no se pierde). Se puede recuperar.',()=>del('puntos',b.dataset.del)));
   cont.querySelectorAll('[data-vermapa]').forEach(b=>b.onclick=()=>{const p=state.puntos.find(x=>x.id==b.dataset.vermapa);if(p&&p.lat!=null){go('mapa');userMoved=true;setTimeout(()=>{state.map&&state.map.setView([p.lat,p.lng],15);},300);}else toast('Ese punto no tiene ubicación');});
+  cont.querySelectorAll('[data-voto]').forEach(b=>b.onclick=()=>{ const i=b.dataset.voto.indexOf(':'); votar(b.dataset.voto.slice(i+1), b.dataset.voto.slice(0,i)); });
   wireFotos(cont);
 }
 
@@ -678,9 +774,10 @@ function initMap(){
   state.markers = L.layerGroup().addTo(state.map);
   state.map.on('dragstart zoomstart', ()=>{ userMoved=true; });
   // Botones propios (ubicación / ver todos)
-  const bl=$('#btn-locate'), bf=$('#btn-fitall');
+  const bl=$('#btn-locate'), bf=$('#btn-fitall'), ba=$('#btn-anclas');
   if(bl) bl.onclick=()=>locateMe(true);
   if(bf) bf.onclick=()=>{ userMoved=false; mapFitDone=false; fitToPoints(); };
+  if(ba) ba.onclick=()=>{ state.showAnclas = (state.showAnclas===false); ba.classList.toggle('off', state.showAnclas===false); renderMap(); };
   initMapSearch();
   // ubicar al usuario suave al abrir (sin forzar si ya movió)
   locateMe(false);
@@ -765,9 +862,15 @@ function renderMap(){
   vivos('puntos').forEach(p=>{
     if(p.lat==null||p.lng==null) return;
     const c=color(p);
-    const m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:.98});
+    const lvl=trustLevel(p), anc=anclaDe(p);
+    // ARO DE CONFIANZA (eje aparte del semáforo): verde=confiable, rojo punteado=dudoso.
+    // El color del PIN sigue siendo "qué falta" (rojo/verde); el aro NO se pisa con eso.
+    if(lvl.k!=='media'){
+      state.markers.addLayer(L.circleMarker([p.lat,p.lng],{radius:18,color:lvl.col,weight:3,opacity:.9,fill:false,dashArray:lvl.k==='baja'?'4 5':null,interactive:false}));
+    }
+    const m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:lvl.k==='baja'?.55:.98});
     const falta=(p.faltan||[]).join(', ');
-    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${anc?' · 📍 '+esc(anc.n):''}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
     m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,-10],className:'mk-label'});
     state.markers.addLayer(m);
     state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});
@@ -790,6 +893,17 @@ function renderMap(){
     state.markers.addLayer(m);
     state._mk.push({nombre:f.nombre,muni:f.direccion||f.destino||'Centro de acopio',lat:f.lat,lng:f.lng,m});
   });
+  // ANCLAS DE CONFIANZA: zonas urbanas con instituciones (hospital, alcaldía, Cruz Roja,
+  // bomberos, policía, universidades). Se dibuja un halo suave = radio de confianza. Los
+  // puntos que nacen dentro arrancan con más confianza. Se pueden ocultar con el botón 🏛️.
+  if(state.showAnclas!==false){
+    ANCLAS.forEach(a=>{
+      state.markers.addLayer(L.circle([a.lat,a.lng],{radius:a.r*1000,color:'#0ea5e9',weight:1,opacity:.35,fillColor:'#0ea5e9',fillOpacity:.06,interactive:false}));
+      const m=L.marker([a.lat,a.lng],{icon:pinIcon('#0ea5e9','🏛️')});
+      m.bindPopup(`<b>🏛️ ${esc(a.n)}</b><br>Zona con instituciones (hospital, alcaldía, Cruz Roja, bomberos, policía, universidades). Los reportes cerca de aquí arrancan con más confianza.`);
+      state.markers.addLayer(m);
+    });
+  }
   // La primera vez que llegan puntos, encuadra el mapa para que se VEAN (si el usuario no movió aún)
   if(!mapFitDone && !userMoved) fitToPoints();
 }
@@ -1109,6 +1223,8 @@ function submitForm(kind){
       faltan:readMulti('faltan'), sobran:readMulti('sobran'),
       necesita_rescate: !!fd.get('necesita_rescate'), nota:g('nota'), creado_por: cache(LS.user)||'',
       lat:gps.lat, lng:gps.lng, estado:'activo', foto:currentPhoto||null, tiene_foto: !!currentPhoto };
+    const anc=anclaCerca(gps.lat,gps.lng);   // ¿nace cerca de instituciones? → arranca con más confianza
+    data.cerca_ancla=!!anc; data.ancla_nombre=anc?anc.n:null; data.ancla_tipo=anc?anc.t:null;
   } else if(kind==='entrega'){
     if(!g('lugar')) return toast('Falta el lugar');
     table='entregas';
