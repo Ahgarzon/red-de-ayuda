@@ -472,6 +472,8 @@ const ENT_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-entidad'
 const TIPOS_ENT = [['ambulancia','🚑 Ambulancia'],['bomberos','🚒 Bomberos'],['cruz_roja','➕ Cruz Roja'],['defensa_civil','🛟 Defensa Civil'],['policia','👮 Policía'],['ejercito','🎖️ Ejército'],['hospital','🏥 Hospital / Salud'],['alcaldia','🏛️ Alcaldía / Gobierno'],['otro','🤝 Otra entidad']];
 const TIPO_LBL = Object.fromEntries(TIPOS_ENT.map(([k,v])=>[k,v]));
 let entOpen=false;
+let entFiltro='crit';   // crit | sin | cam | res  — cuál cifra está seleccionada
+let entMuni=null;       // filtra la lista por municipio (desde "dónde se concentra")
 function entidad(){ return cache(LS.entidad)||null; }
 function esEntidad(){ const e=entidad(); return !!(e&&e.codigo); }
 /* estado de atención legible (para TODOS: badge en la tarjeta y en el mapa) */
@@ -579,11 +581,29 @@ function entFormsHTML(){
     <div class="ent-ok hidden" id="ent-reg-ok"></div>
   </div>`;
 }
-function tabRow(p){
+/* Trazabilidad: quién atiende un punto (para que se vea quién lo tomó) */
+function entWho(p){
+  if(!p.atendido_nombre) return '';
+  const ico = p.atencion==='resuelto' ? '✅' : '🚑';
+  let t=''; if(p.atendido_at){ try{ t=' · '+new Date(p.atendido_at).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){} }
+  return `<span class="tr-who">${ico} ${nomEnt(p.atendido_nombre)}${t}</span>`;
+}
+/* Una fila del tablero. Los botones dependen del estado. Cuando ya está EN ATENCIÓN,
+   la fila se puede DESLIZAR a la derecha para liberarla (por si tocaron "Voy" por error). */
+function entRow(p){
   const c=color(p);
-  return `<div class="tab-row ${c}">
-    <div class="tr-main"><b>${esc(p.nombre)}</b><span>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} pers.</span></div>
-    <div class="tr-act"><button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy</button></div>
+  const a=p.atencion||'sin_atender';
+  let acts='';
+  if(a==='sin_atender') acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy</button>`;
+  else if(a==='en_camino') acts=`<button class="btn-mini atn done" data-atender="resuelto:${p.id}">✅ Resuelto</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Deshacer</button>`;
+  else acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Reabrir</button>`;
+  const canSwipe = a==='en_camino';
+  return `<div class="ent-swipe${canSwipe?' swipeable':''}"${canSwipe?` data-swipe="${p.id}"`:''}>
+    <div class="swipe-bg">↩︎ suelta para liberar</div>
+    <div class="tab-row ${c}">
+      <div class="tr-main"><b>${esc(p.nombre)}</b><span>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} pers.</span>${entWho(p)}</div>
+      <div class="tr-act">${acts}</div>
+    </div>
   </div>`;
 }
 function tableroHTML(e){
@@ -596,22 +616,33 @@ function tableroHTML(e){
   const mios=cam.filter(p=>p.atendido_por && p.atendido_por===e.id);
   const byM={}; sin.forEach(p=>{ const m=[p.municipio,p.departamento].filter(Boolean).join(', ')||'Sin ubicación'; byM[m]=(byM[m]||0)+1; });
   const topM=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  // Lista de abajo según la CIFRA seleccionada (tarjetas clicables) + municipio opcional
+  const listas={ crit:critSin, sin:sin, cam:cam, res:res };
+  const titulos={ crit:'🚨 Críticos sin atender', sin:'📋 Todos sin atender', cam:'🚑 En atención · quién va', res:'✅ Resueltos' };
+  let lista=(listas[entFiltro]||critSin).slice();
+  if(entMuni) lista=lista.filter(p=>([p.municipio,p.departamento].filter(Boolean).join(', ')||'Sin ubicación')===entMuni);
+  lista.sort((a,b)=>urgScore(b)-urgScore(a));
+  lista=lista.slice(0,40);
+  const vacio = entFiltro==='res' ? 'Aún no hay puntos resueltos.' : entFiltro==='cam' ? 'Ninguna entidad va en camino todavía.' : 'Nada por acá ahora mismo. 🙌';
+
   return `
   <div class="ent-head">
     <div><h2>${esc(TIPO_LBL[e.tipo]||'Entidad')}</h2><p class="ent-sub">${esc(e.nombre)}${e.ciudad?' · '+esc(e.ciudad):''}</p></div>
     <div class="ent-head-btns"><button class="btn-sec" id="ent-rotar" title="Genera un código nuevo y anula el actual">🔑 Cambiar código</button><button class="btn-sec" id="ent-salir">Salir</button></div>
   </div>
+  <p class="ent-tip">👆 Toca una cifra para ver esa lista. En “En atención”, desliza una fila a la derecha para liberarla si te confundiste.</p>
   <div class="tab-grid">
-    <div class="tab-cell crit"><b>${critSin.length}</b><small>críticos sin atender</small></div>
-    <div class="tab-cell"><b>${sin.length}</b><small>sin atender</small></div>
-    <div class="tab-cell cam"><b>${cam.length}</b><small>en atención</small></div>
-    <div class="tab-cell done"><b>${res.length}</b><small>resueltos</small></div>
+    <div class="tab-cell crit${entFiltro==='crit'?' on':''}" data-entf="crit"><b>${critSin.length}</b><small>críticos sin atender</small></div>
+    <div class="tab-cell${entFiltro==='sin'?' on':''}" data-entf="sin"><b>${sin.length}</b><small>sin atender</small></div>
+    <div class="tab-cell cam${entFiltro==='cam'?' on':''}" data-entf="cam"><b>${cam.length}</b><small>en atención</small></div>
+    <div class="tab-cell done${entFiltro==='res'?' on':''}" data-entf="res"><b>${res.length}</b><small>resueltos</small></div>
   </div>
-  ${mios.length?`<div class="ent-mine">🚑 Tu entidad va en camino a <b>${mios.length}</b> punto${mios.length!==1?'s':''}.</div>`:''}
-  <h3 class="ent-h3">🚨 Críticos sin atender</h3>
-  <div class="ent-list">${critSin.length?critSin.sort((a,b)=>urgScore(b)-urgScore(a)).slice(0,12).map(tabRow).join(''):'<div class="empty">Nada crítico sin atender ahora mismo. 🙌</div>'}</div>
+  ${mios.length?`<div class="ent-mine" data-entf="cam">🚑 Tu entidad va en camino a <b>${mios.length}</b> punto${mios.length!==1?'s':''}. <span class="ent-mine-cta">Ver ›</span></div>`:''}
+  <h3 class="ent-h3">${titulos[entFiltro]||''}${entMuni?` · <span class="ent-muni-tag">${esc(entMuni)} ✕</span>`:''}</h3>
+  <div class="ent-list">${lista.length?lista.map(entRow).join(''):`<div class="empty">${vacio}</div>`}</div>
   <h3 class="ent-h3">📍 Dónde se concentra lo pendiente</h3>
-  <div class="ent-munis">${topM.length?topM.map(([m,n])=>`<div class="muni-row"><span>${esc(m)}</span><b>${n}</b></div>`).join(''):'<div class="empty">—</div>'}</div>`;
+  <div class="ent-munis">${topM.length?topM.map(([m,n])=>`<div class="muni-row" data-muni="${esc(m)}"><span>${esc(m)}</span><b>${n}</b></div>`).join(''):'<div class="empty">—</div>'}</div>`;
 }
 function renderEntidad(){
   const body=$('#ent-body'); if(!body) return;
@@ -632,6 +663,24 @@ function wireEntidad(body){
   const rt=body.querySelector('#ent-rotar'); if(rt) rt.onclick=rotarCodigoEntidad;
   body.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1),s.slice(0,i)); });
   body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
+  // cifras del tablero CLICABLES → filtran la lista de abajo
+  body.querySelectorAll('[data-entf]').forEach(el=>el.onclick=()=>{ entFiltro=el.dataset.entf; entMuni=null; renderEntidad(); });
+  // municipios de "dónde se concentra" CLICABLES → filtran por ese municipio
+  body.querySelectorAll('[data-muni]').forEach(el=>el.onclick=()=>{ entMuni=el.dataset.muni; entFiltro='sin'; renderEntidad(); });
+  const mt=body.querySelector('.ent-muni-tag'); if(mt) mt.onclick=ev=>{ ev.stopPropagation(); entMuni=null; renderEntidad(); };
+  // deslizar una fila "en atención" a la derecha para liberarla (deshacer)
+  body.querySelectorAll('.ent-swipe.swipeable').forEach(wireSwipe);
+}
+/* Gesto: deslizar la fila a la derecha (touch o ratón) para liberar el punto */
+function wireSwipe(wrap){
+  const row=wrap.querySelector('.tab-row'); if(!row) return;
+  const id=wrap.dataset.swipe; const TH=90; let x0=null,dx=0;
+  function move(e){ if(x0==null) return; const t=e.touches?e.touches[0]:e; dx=Math.max(0,Math.min(150,t.clientX-x0)); row.style.transform='translateX('+dx+'px)'; wrap.classList.toggle('armed',dx>=TH); }
+  function end(){ row.style.transition='transform .18s ease'; if(dx>=TH){ row.style.transform='translateX(100%)'; row.style.opacity='0'; setTimeout(()=>atender(id,'sin_atender'),150); } else { row.style.transform='translateX(0)'; wrap.classList.remove('armed'); } cleanup(); }
+  function cleanup(){ document.removeEventListener('touchmove',move); document.removeEventListener('touchend',end); document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',end); x0=null; }
+  function start(e){ if(e.target.closest('button')) return; const t=e.touches?e.touches[0]:e; x0=t.clientX; dx=0; row.style.transition='none'; document.addEventListener('touchmove',move,{passive:true}); document.addEventListener('touchend',end); document.addEventListener('mousemove',move); document.addEventListener('mouseup',end); }
+  row.addEventListener('touchstart',start,{passive:true});
+  row.addEventListener('mousedown',start);
 }
 async function loginEntidad(){
   const inp=$('#ent-cod'), msg=$('#ent-login-msg'); if(!inp) return;
