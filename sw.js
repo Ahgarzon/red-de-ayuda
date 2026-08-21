@@ -3,7 +3,7 @@ const TILES='ayuda-tiles-v3';
 const BASE='ayuda-base-v2';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
 importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
 const SHELL=[
-  './','./index.html','./styles.css?v=42','./app.js?v=42','./manifest.webmanifest','./base-tiles.js','./gazetteer.js',
+  './','./index.html','./styles.css?v=44','./app.js?v=44','./manifest.webmanifest','./base-tiles.js','./gazetteer.js',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',

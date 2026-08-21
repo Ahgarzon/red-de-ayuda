@@ -1615,6 +1615,7 @@ function boot(){
     const showWelcome=()=>$('#welcome').classList.remove('hidden');
     const hideWelcome=()=>{ $('#welcome').classList.add('hidden'); cache('ay_seen', true); };
     $('#welcome-go').onclick=hideWelcome;
+    const we=$('#welcome-entidad'); if(we) we.onclick=()=>{ hideWelcome(); openEntidad(); };
     $('#btn-guia').onclick=showWelcome;
     $('#btn-tour').onclick=showWelcome;
     if(!cache('ay_seen')) showWelcome();

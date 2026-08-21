@@ -299,6 +299,10 @@ textarea{min-height:74px;resize:vertical}
 .wstep b{font-size:17px}
 .welcome-net{font-size:15px;font-weight:700;opacity:.95;margin:0 0 18px}
 .welcome .btn-primary{background:#fff;color:var(--accent);font-size:19px;padding:18px}
+.welcome-ent{margin-top:22px;padding-top:20px;border-top:1px solid rgba(255,255,255,.18);text-align:center}
+.welcome-ent-q{margin:0;font-size:17px;font-weight:800;color:#fff}
+.welcome-ent-sub{margin:6px 4px 12px;font-size:13px;line-height:1.45;opacity:.82}
+.welcome-ent-btn{width:100%;background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.4);border-radius:14px;padding:15px;font-size:16px;font-weight:800}
 
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-bot));transform:translateX(-50%);background:#0f1a20;color:#fff;padding:14px 20px;border-radius:12px;font-size:15.5px;z-index:2500;box-shadow:var(--shadow);max-width:88%}
 .leaflet-container{background:#dfe6ef}
