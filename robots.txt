@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://xn--aydamecolombia-mrb.space/sitemap.xml
+Sitemap: https://ayudamecolombia.co/sitemap.xml
