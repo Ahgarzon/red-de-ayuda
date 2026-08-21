@@ -573,10 +573,11 @@ function entFormsHTML(){
     <input id="er-ciudad" placeholder="Ej: Popayán">
     <label>Responsable / contacto</label>
     <input id="er-resp" placeholder="Nombre de quien coordina">
+    <label>Correo electrónico *</label>
+    <input id="er-email" type="email" inputmode="email" placeholder="correo@entidad.gov.co">
+    <p class="ent-hint">📧 A este correo te enviamos tu código de acceso y el aviso de aprobación. Es obligatorio.</p>
     <label>Teléfono / WhatsApp</label>
     <input id="er-tel" inputmode="tel" placeholder="Ej: 300 000 0000">
-    <label>Correo</label>
-    <input id="er-email" type="email" placeholder="correo@entidad.gov.co">
     <button class="btn-primary" id="ent-reg-go">Enviar registro</button>
     <div class="ent-ok hidden" id="ent-reg-ok"></div>
   </div>`;
@@ -704,7 +705,8 @@ async function registrarEntidad(){
         responsable=g('#er-resp'), telefono=g('#er-tel'), email=g('#er-email');
   const ok=$('#ent-reg-ok'), btn=$('#ent-reg-go');
   if(nombre.length<3){ toast('Escribe el nombre de la entidad'); return; }
-  if(!telefono && !email){ toast('Deja un teléfono o un correo de contacto'); return; }
+  if(!email){ toast('El correo es obligatorio: ahí te llega tu código'); const ie=$('#er-email'); if(ie) ie.focus(); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast('Ese correo no parece válido. Revísalo.'); const ie=$('#er-email'); if(ie) ie.focus(); return; }
   if(btn){ btn.disabled=true; var antes=btn.textContent; btn.textContent='Enviando…'; }
   try{
     const r=await fetch(ENT_API,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({nombre,tipo,ciudad,responsable,telefono,email})});
