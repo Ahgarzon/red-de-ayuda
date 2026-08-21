@@ -1652,7 +1652,9 @@ function downscale(file, cb){
 // para poder regresar al menú anterior. El Mapa es la pantalla base (home).
 let navHistory=[];
 function curScreen(){ const s=document.querySelector('.screen.active'); return s? s.id.replace('screen-',''):'mapa'; }
-function updateBackBtn(){ const b=$('#btn-back'); if(b) b.classList.toggle('hidden', navHistory.length===0); }
+// La flecha de volver queda SIEMPRE visible en el header (decisión de Angel: "por si acaso").
+// En el Mapa (home) no hay historial: al tocarla simplemente se queda en el Mapa, no molesta.
+function updateBackBtn(){ const b=$('#btn-back'); if(b) b.classList.remove('hidden'); }
 function goBack(){ const prev=navHistory.pop(); go(prev||'mapa', true); }
 function go(screen, isBack){
   const cur=curScreen();
