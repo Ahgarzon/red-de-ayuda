@@ -42,7 +42,15 @@ body{
   padding:calc(9px + var(--safe-top)) 16px 9px;
   background:var(--header);color:#fff;flex:none;
 }
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1;justify-content:center}
+.back-btn{
+  background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;cursor:pointer;padding:0;
+  width:clamp(34px,9.6vw,40px);height:clamp(34px,9.6vw,40px);flex:none;
+  display:grid;place-items:center;
+}
+.back-btn svg{width:21px;height:21px;display:block}
+.back-btn:active{transform:scale(.94)}
+.back-btn.hidden{visibility:hidden}
 .brand>div{min-width:0}
 .logo{
   width:clamp(34px,9.6vw,40px);height:clamp(34px,9.6vw,40px);border-radius:11px;flex:none;

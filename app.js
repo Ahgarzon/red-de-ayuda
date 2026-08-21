@@ -1554,11 +1554,20 @@ function downscale(file, cb){
 }
 
 /* ================= NAV ================= */
-function go(screen){
+// Historial simple para el botón "volver": guarda de qué pantalla venías
+// para poder regresar al menú anterior. El Mapa es la pantalla base (home).
+let navHistory=[];
+function curScreen(){ const s=document.querySelector('.screen.active'); return s? s.id.replace('screen-',''):'mapa'; }
+function updateBackBtn(){ const b=$('#btn-back'); if(b) b.classList.toggle('hidden', navHistory.length===0); }
+function goBack(){ const prev=navHistory.pop(); go(prev||'mapa', true); }
+function go(screen, isBack){
+  const cur=curScreen();
+  if(!isBack && cur!==screen) navHistory.push(cur);
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   $('#screen-'+screen).classList.add('active');
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.screen===screen));
   if(screen==='mapa'){ initMap(); setTimeout(()=>state.map&&state.map.invalidateSize(),120); }
+  updateBackBtn();
 }
 function closeModal(){ $('#modal').classList.add('hidden'); destroyPick(); editingId=null; editingKind=null; }
 function syncSeg(){
@@ -1596,6 +1605,7 @@ function boot(){
   // y el botón Empezar SIEMPRE quedan vivos, aunque el pintado o el mapa fallen.
   try{
     document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.screen));
+    { const bk=$('#btn-back'); if(bk) bk.onclick=goBack; }
     document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
     document.querySelectorAll('.seg-btn').forEach(b=>b.onclick=()=>{segDonar=b.dataset.seg;syncSeg();});
     document.querySelectorAll('#orden-puntos .seg-btn').forEach(b=>b.onclick=()=>{
