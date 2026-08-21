@@ -476,6 +476,25 @@ textarea{min-height:74px;resize:vertical}
 .popup-atn{display:inline-block;margin:6px 6px 0 0;padding:7px 11px;border-radius:10px;border:none;
   background:#2563eb;color:#fff;font-weight:800;font-size:13px;cursor:pointer}
 .popup-atn.done{background:#16a34a}
+/* Líneas de emergencia */
+.lineas-card{border-left:5px solid var(--rojo)}
+.lineas-sub{margin:0 0 13px;color:var(--text-soft);font-size:14.5px;line-height:1.4}
+.linea{display:flex;align-items:center;gap:13px;text-decoration:none;color:var(--text);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:14px;
+  padding:12px 14px;min-height:44px}
+.linea:active{background:var(--accent-soft)}
+.linea .l-num{flex:none;font-weight:800;font-size:20px;color:var(--rojo);min-width:46px;text-align:center}
+.linea .l-txt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.linea .l-txt b{font-size:15.5px}
+.linea .l-txt small{color:var(--text-soft);font-size:12.5px;margin-top:2px}
+.linea-urgente{background:var(--rojo);border-color:var(--rojo);color:#fff;margin-bottom:10px;
+  box-shadow:0 6px 16px rgba(224,50,47,.28)}
+.linea-urgente .l-num{color:#fff;font-size:26px}
+.linea-urgente .l-txt small{color:rgba(255,255,255,.85)}
+.linea-urgente .l-call{margin-left:auto;flex:none;background:rgba(255,255,255,.22);
+  color:#fff;font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:11px}
+.lineas-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lineas-nota{margin:12px 0 0;color:var(--text-soft);font-size:13px;line-height:1.45}
 /* Tarjeta de acceso en la sección Ayuda */
 .entidad-card{border-left:5px solid #2563eb}
 /* Overlay del modo entidades */
