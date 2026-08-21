@@ -559,8 +559,8 @@ function entFormsHTML(){
     <button class="ent-tab" data-et="reg">Registrar mi entidad</button>
   </div>
   <div class="ent-pane" id="ent-pane-login">
-    <label>Código de acceso (6 dígitos)</label>
-    <input id="ent-cod" inputmode="numeric" maxlength="6" placeholder="Ej: 482913" value="${guard?esc(guard):''}">
+    <label>Código de acceso (6 caracteres)</label>
+    <input id="ent-cod" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6" placeholder="Ej: FYA94S" style="text-transform:uppercase" value="${guard?esc(guard):''}">
     <button class="btn-primary" id="ent-login-go">Entrar</button>
     <p class="ent-hint" id="ent-login-msg">${guard?'Tienes un código guardado en este equipo. Si ya lo aprobaron, toca Entrar.':''}</p>
   </div>
@@ -685,7 +685,7 @@ function wireSwipe(wrap){
 }
 async function loginEntidad(){
   const inp=$('#ent-cod'), msg=$('#ent-login-msg'); if(!inp) return;
-  const cod=(inp.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+  const cod=(inp.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
   if(cod.length<6){ if(msg) msg.textContent='Escribe tu código de acceso completo.'; return; }
   if(msg) msg.textContent='Verificando…';
   try{
