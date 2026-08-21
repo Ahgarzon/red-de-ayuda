@@ -527,7 +527,7 @@ async function atender(id, estado, forzar){
 }
 
 function openEntidad(){ entOpen=true; renderEntidad(); const el=$('#entidad'); if(el) el.classList.remove('hidden'); }
-function closeEntidad(){ entOpen=false; const el=$('#entidad'); if(el) el.classList.add('hidden'); }
+function closeEntidad(){ entOpen=false; backToEntidad=false; const el=$('#entidad'); if(el) el.classList.add('hidden'); }
 function salirEntidad(){ cache(LS.entidad,null); try{localStorage.removeItem(LS.entidad);}catch(e){} renderEntidad(); renderAll(); toast('Saliste del modo entidad'); }
 /* Cambiar el codigo de acceso: la base genera uno nuevo y el anterior deja de servir al
    instante. Sirve cuando el codigo se compartio de mas o alguien salio de la entidad. */
@@ -663,7 +663,7 @@ function wireEntidad(body){
   const sl=body.querySelector('#ent-salir'); if(sl) sl.onclick=salirEntidad;
   const rt=body.querySelector('#ent-rotar'); if(rt) rt.onclick=rotarCodigoEntidad;
   body.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1),s.slice(0,i)); });
-  body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
+  body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); backToEntidad=true; userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
   // cifras del tablero CLICABLES → filtran la lista de abajo
   body.querySelectorAll('[data-entf]').forEach(el=>el.onclick=()=>{ entFiltro=el.dataset.entf; entMuni=null; renderEntidad(); });
   // municipios de "dónde se concentra" CLICABLES → filtran por ese municipio
@@ -1653,13 +1653,19 @@ function downscale(file, cb){
 // Historial simple para el botón "volver": guarda de qué pantalla venías
 // para poder regresar al menú anterior. El Mapa es la pantalla base (home).
 let navHistory=[];
+// Cuando una entidad toca "ver en el mapa" desde su tablero, salimos del modo entidad
+// para ver el punto. La flecha de volver debe REGRESAR al tablero de entidad (no al menú),
+// que es un overlay, no una .screen, y por eso el historial normal no lo recuerda.
+let backToEntidad=false;
 function curScreen(){ const s=document.querySelector('.screen.active'); return s? s.id.replace('screen-',''):'mapa'; }
 // La flecha de volver queda SIEMPRE visible en el header (decisión de Angel: "por si acaso").
 // En el Mapa (home) no hay historial: al tocarla simplemente se queda en el Mapa, no molesta.
 function updateBackBtn(){ const b=$('#btn-back'); if(b) b.classList.remove('hidden'); }
-function goBack(){ const prev=navHistory.pop(); go(prev||'mapa', true); }
+function goBack(){ if(backToEntidad){ backToEntidad=false; openEntidad(); return; } const prev=navHistory.pop(); go(prev||'mapa', true); }
 function go(screen, isBack){
   const cur=curScreen();
+  // cualquier navegación hacia adelante (tocar una pestaña) cancela el regreso al tablero de entidad
+  if(!isBack) backToEntidad=false;
   if(!isBack && cur!==screen) navHistory.push(cur);
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   $('#screen-'+screen).classList.add('active');
