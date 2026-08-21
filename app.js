@@ -46,15 +46,15 @@ function deviceId(){
   return d;
 }
 const ME = deviceId();
-/* Modo operador (ZOSA): abrir la app con  #op-zosa2026  desbloquea moderar TODO
-   (marcar/cambiar/borrar cualquier reporte). Con  #op-off  se sale de ese modo. */
-const OP_KEY = 'zosa2026';
+/* Modo operador: YA NO hay ninguna clave escrita dentro de la app. La anterior estaba a
+   la vista de cualquiera que abriera el codigo y desbloqueaba moderar todo. Ahora modera
+   quien entra en "Modo entidades" con un codigo de tipo operador o alcaldia, y es la
+   BASE DE DATOS la que comprueba ese permiso en cada accion. */
 (function(){
   const h = location.hash||'';
-  if(h==='#op-off'){ try{localStorage.removeItem('ay_admin');}catch(e){} history.replaceState(null,'',location.pathname); }
-  else if(h.indexOf('op-')>=0 && h.indexOf(OP_KEY)>=0){ cache('ay_admin', true); history.replaceState(null,'',location.pathname); }
+  if(h.indexOf('op')>=0){ try{localStorage.removeItem('ay_admin');}catch(e){} history.replaceState(null,'',location.pathname); }
 })();
-const isAdmin = ()=> !!cache('ay_admin');
+function isAdmin(){ const e=cache(LS.entidad); return !!(e && e.codigo && (e.tipo==='operador' || e.tipo==='alcaldia')); }
 /* ¿Este reporte lo puedo tocar? Sí si es mío, si soy operador, o si es un registro
    viejo que aún no tiene dueño (para no congelar lo creado antes de esta versión). */
 function mine(rec){ return isAdmin() || !rec || !rec.owner || rec.owner===ME; }
@@ -218,8 +218,16 @@ async function votar(id, valor){
   const campo = valor==='confia' ? 'votos_confia' : 'votos_duda';
   const nuevo = (+p[campo]||0)+1;
   // auditoría en la base (no bloquea; si falla por doble voto o sin señal, no importa)
-  try{ api('insert','votos',{data:{punto_id:String(id), device:ME, valor}}); }catch(e){}
-  update('puntos', id, {[campo]:nuevo});                        // contador + re-render
+  // El conteo lo hace la BASE DE DATOS, que recuenta los votos reales. El navegador ya
+  // NO manda el numero: asi nadie puede inflar la confianza de un punto desde afuera.
+  p[campo]=nuevo; cache(LS.puntos, state.puntos); renderAll();   // +1 optimista, se ve al instante
+  try{
+    const rv = await api('votar','puntos',{ id:String(id), valor });
+    if(Array.isArray(rv) && rv[0]){
+      p.votos_confia = +rv[0].votos_confia||0; p.votos_duda = +rv[0].votos_duda||0;
+      cache(LS.puntos, state.puntos); renderAll();
+    }
+  }catch(e){}                        // contador + re-render
   toast(valor==='confia' ? '¡Gracias! Marcaste este lugar como confiable 👍' : 'Gracias, lo marcaste como dudoso 👀');
 }
 /* bloque de confianza para la tarjeta de un lugar */
@@ -239,7 +247,9 @@ function trustBlock(p){
 
 /* ---------- backend ---------- */
 async function api(action, table, extra={}){
-  const body = Object.assign({action, table}, extra);
+  // owner/device viajan SIEMPRE: el servidor los usa para comprobar que quien edita o
+  // borra un registro es su autor. Sin esto, cualquiera podria tocar lo de los demas.
+  const body = Object.assign({action, table, owner: ME, device: ME}, extra);
   const r = await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body) });
   if(!r.ok) throw new Error('http '+r.status);
   const txt = await r.text();
@@ -321,6 +331,14 @@ async function del(table, id){
     // aún no llegó al servidor: marca su inserción pendiente como archivada
     state.queue.forEach(j=>{ if(j.op==='insert'&&j.table===table&&j.__id===id&&j.data){ j.data.archivado=true; } });
     cache(LS.queue,state.queue); return;
+  }
+  const rec0 = state[table].find(x=>String(x.id)===String(id));
+  if(rec0 && rec0.owner && rec0.owner!==ME && isAdmin()){
+    // Moderacion: la base exige un codigo de operador aprobado. Archiva, nunca destruye.
+    const ent0=cache(LS.entidad);
+    try{ await api('moderar', table, {id, codigo:ent0.codigo, modo:'archivar'}); }
+    catch(err){ toast('No se pudo ocultar. Revisa tu internet.'); }
+    return;
   }
   update(table, id, {archivado:true});   // persiste el archivado (offline-safe, se reintenta)
 }
@@ -484,11 +502,20 @@ function atnPopup(p){
 /* Cambiar el estado de atención de un punto. La base exige entidad APROBADA (por su código);
    si no lo está, devuelve error y no cambia nada. No se encola offline: es una acción de
    coordinación que necesita confirmación del servidor. */
-async function atender(id, estado){
+async function atender(id, estado, forzar){
   const e=entidad(); if(!e||!e.codigo){ toast('Entra como entidad primero'); openEntidad(); return; }
   const p=state.puntos.find(x=>String(x.id)===String(id)); if(!p) return;
   try{
-    const res=await api('atender', null, { codigo:e.codigo, id, estado });
+    const res=await api('atender', null, { codigo:e.codigo, id, estado, forzar: forzar===true });
+    // La base avisa si OTRA entidad ya tomo ese punto, en vez de pisarla en silencio.
+    if(res && res.message && String(res.message).indexOf('ocupado|')===0){
+      const q=String(res.message).split('|');
+      const quien=String(q[1]||'otra entidad').replace(' - ',' · ').replace(/_/g,' ');
+      askConfirm('Ese punto ya lo tomo otra entidad',
+        quien+' lo marco como "voy en camino" el '+(q[2]||'')+'. Si tu tambien vas, quedara a tu nombre y se guardara que lo tomaste despues.',
+        ()=>atender(id, estado, true));
+      return;
+    }
     if(Array.isArray(res) && res[0]){
       Object.assign(p,{atencion:res[0].atencion, atendido_por:res[0].atendido_por, atendido_nombre:res[0].atendido_nombre, atendido_at:res[0].atendido_at});
       cache(LS.puntos, state.puntos); renderAll(); if(entOpen) renderEntidad();
@@ -500,6 +527,22 @@ async function atender(id, estado){
 function openEntidad(){ entOpen=true; renderEntidad(); const el=$('#entidad'); if(el) el.classList.remove('hidden'); }
 function closeEntidad(){ entOpen=false; const el=$('#entidad'); if(el) el.classList.add('hidden'); }
 function salirEntidad(){ cache(LS.entidad,null); try{localStorage.removeItem(LS.entidad);}catch(e){} renderEntidad(); renderAll(); toast('Saliste del modo entidad'); }
+/* Cambiar el codigo de acceso: la base genera uno nuevo y el anterior deja de servir al
+   instante. Sirve cuando el codigo se compartio de mas o alguien salio de la entidad. */
+async function rotarCodigoEntidad(){
+  const e=entidad(); if(!e||!e.codigo) return;
+  askConfirm('¿Cambiar el código de acceso?','El código actual dejará de funcionar de inmediato. Tendrás que darle el nuevo a tu equipo.',async()=>{
+    try{
+      const r=await api('entidad_rotar', null, {codigo:e.codigo});
+      const row=Array.isArray(r)&&r[0]?r[0]:null;
+      if(row&&row.codigo){
+        cache(LS.entidad, Object.assign({}, e, {codigo:row.codigo}));
+        renderEntidad();
+        askConfirm('Tu código nuevo es '+row.codigo,'Anótalo ahora. El anterior ya no sirve.',()=>{});
+      } else { toast('No se pudo cambiar el código.'); }
+    }catch(err){ toast('No se pudo cambiar el código. Revisa tu internet.'); }
+  });
+}
 
 function entFormsHTML(){
   const guard = cache('ay_ent_cod');
@@ -556,7 +599,7 @@ function tableroHTML(e){
   return `
   <div class="ent-head">
     <div><h2>${esc(TIPO_LBL[e.tipo]||'Entidad')}</h2><p class="ent-sub">${esc(e.nombre)}${e.ciudad?' · '+esc(e.ciudad):''}</p></div>
-    <button class="btn-sec" id="ent-salir">Salir</button>
+    <div class="ent-head-btns"><button class="btn-sec" id="ent-rotar" title="Genera un código nuevo y anula el actual">🔑 Cambiar código</button><button class="btn-sec" id="ent-salir">Salir</button></div>
   </div>
   <div class="tab-grid">
     <div class="tab-cell crit"><b>${critSin.length}</b><small>críticos sin atender</small></div>
@@ -586,17 +629,19 @@ function wireEntidad(body){
   const lg=body.querySelector('#ent-login-go'); if(lg) lg.onclick=loginEntidad;
   const rg=body.querySelector('#ent-reg-go'); if(rg) rg.onclick=registrarEntidad;
   const sl=body.querySelector('#ent-salir'); if(sl) sl.onclick=salirEntidad;
+  const rt=body.querySelector('#ent-rotar'); if(rt) rt.onclick=rotarCodigoEntidad;
   body.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1),s.slice(0,i)); });
   body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
 }
 async function loginEntidad(){
   const inp=$('#ent-cod'), msg=$('#ent-login-msg'); if(!inp) return;
-  const cod=(inp.value||'').replace(/\D/g,'').slice(0,6);
-  if(cod.length<6){ if(msg) msg.textContent='Escribe tu código de 6 dígitos.'; return; }
+  const cod=(inp.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+  if(cod.length<6){ if(msg) msg.textContent='Escribe tu código de acceso completo.'; return; }
   if(msg) msg.textContent='Verificando…';
   try{
     const res=await api('entidad_login', null, {codigo:cod});
     const row=Array.isArray(res)&&res[0]?res[0]:null;
+    if(row && row.estado==='bloqueado'){ if(msg) msg.textContent='🔒 Demasiados intentos fallidos desde este dispositivo. Espera 10 minutos y vuelve a intentarlo.'; return; }
     if(!row){ if(msg) msg.textContent='❌ Código no válido. Revisa que esté bien escrito.'; return; }
     if(row.estado==='pendiente'){ if(msg) msg.textContent='⏳ Tu registro está EN REVISIÓN. Te avisamos apenas se apruebe.'; return; }
     if(row.estado!=='aprobada'){ if(msg) msg.textContent='Este acceso no está activo. Escríbenos si crees que es un error.'; return; }

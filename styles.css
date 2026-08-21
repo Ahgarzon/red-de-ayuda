@@ -535,3 +535,6 @@ textarea{min-height:74px;resize:vertical}
 .muni-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
   background:var(--surface-2);border-radius:10px;padding:9px 12px;font-size:14px}
 .muni-row b{font-size:16px;color:var(--accent)}
+
+.ent-head-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ent-head-btns .btn-sec{white-space:nowrap}
