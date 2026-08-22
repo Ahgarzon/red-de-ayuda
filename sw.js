@@ -1,9 +1,9 @@
-const APP='ayuda-v54';
+const APP='ayuda-v55';
 const TILES='ayuda-tiles-v3';
 const BASE='ayuda-base-v2';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
 importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
 const SHELL=[
-  './','./index.html','./styles.css?v=45','./app.js?v=45','./manifest.webmanifest','./base-tiles.js','./gazetteer.js',
+  './','./index.html','./styles.css?v=55','./app.js?v=55','./manifest.webmanifest','./base-tiles.js','./gazetteer.js',
   './icons/icon-192.png?v=11','./icons/icon-512.png?v=11',
   './vendor/leaflet/leaflet.js','./vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/marker-icon.png','./vendor/leaflet/images/marker-icon-2x.png',
@@ -87,7 +87,11 @@ self.addEventListener('fetch', e=>{
   // Si la red responde rápido y bien, se usa esa (siempre la última versión con buena señal).
   if(esCascaron(url, req)){
     e.respondWith((async()=>{
-      const cached = await caches.match(req);
+      // ignoreSearch: app.js?v=51 encuentra el app.js?v=45 ya guardado (es EL MISMO archivo).
+      // Sin esto, al subir el número de versión y luego abrir SIN señal, el ?v nuevo no estaba
+      // en caché → se caía al respaldo y servía el index.html COMO SI FUERA app.js → el script
+      // reventaba, boot() no corría y la app se quedaba girando ("Está tardando"). Este es el fix.
+      const cached = await caches.match(req, {ignoreSearch:true});
       // net → resuelve a la respuesta SOLO si llegó y es válida; si falla o no-ok, resuelve null
       const net = fetch(req).then(res=>{
         if(res && res.ok){
@@ -103,15 +107,20 @@ self.addEventListener('fetch', e=>{
         const winner = await Promise.race([ net, timeout ]);
         return winner || cached;
       }
-      // Primera vez (sin copia guardada): dependemos de la red, con respaldo al index guardado.
+      // Sin copia guardada: dependemos de la red. Si tampoco hay señal, SOLO una navegación
+      // (abrir la página) puede caer al index guardado; para un JS/CSS JAMÁS devolvemos el HTML,
+      // porque servir index.html como si fuera app.js rompe el script y cuelga toda la app.
       const res = await net;
-      return res || (await caches.match('./index.html')) || Response.error();
+      if(res) return res;
+      if(req.mode==='navigate') return (await caches.match('./index.html')) || Response.error();
+      return Response.error();
     })());
     return;
   }
 
-  // Otros estáticos mismo-origen (leaflet, íconos): cache-first con refresco en 2º plano
-  e.respondWith(caches.match(req).then(hit=>{
+  // Otros estáticos mismo-origen (leaflet, íconos): cache-first con refresco en 2º plano.
+  // ignoreSearch por lo mismo: un ?v nuevo reutiliza el archivo ya guardado (funciona sin señal).
+  e.respondWith(caches.match(req,{ignoreSearch:true}).then(hit=>{
     const net=fetch(req).then(res=>{ if(res&&res.ok&&url.origin===location.origin){ caches.open(APP).then(c=>c.put(req,res.clone())); } return res; }).catch(()=>hit);
     return hit||net;
   }));
