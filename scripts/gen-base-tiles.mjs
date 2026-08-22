@@ -75,17 +75,20 @@ const BIG = [
   ['Quibdo z13',       5.694, -76.658],
 ];
 for(const [n, la, lo] of BIG) addCity(n, la, lo, 0.10, 13, 13);
-// Cascos urbanos donde de verdad se marca y se hace mucho zoom → nivel CALLE FINO (z14) para que
-// offline se vea NÍTIDO, no solo ampliado por el respaldo. Radio chico para no inflar la descarga.
+// Cascos urbanos donde de verdad se marca y se hace mucho zoom → nivel CALLE (z14-15) para que
+// offline se vea NÍTIDO y con NOMBRES DE CALLE, no solo ampliado por el respaldo. z15 es donde
+// se leen calles y se ubica bien un punto. Radio chico para no inflar demasiado la descarga base.
+// (El detalle FINO z16-17 de la zona exacta de cada quien se baja con el botón "Descargar este
+//  mapa" dentro de la app, mientras haya señal — ver descargarZona() en app.js.)
 const CORE = [
-  ['Popayan z14',      2.444, -76.614],
-  ['Cali z14',         3.451, -76.532],
-  ['Buenaventura z14', 3.884, -77.069],
-  ['Quibdo z14',       5.694, -76.658],
-  ['Timbio z14',       2.354, -76.684],
-  ['El Bordo z14',     2.120, -76.977],
+  ['Popayan z15',      2.444, -76.614],
+  ['Cali z15',         3.451, -76.532],
+  ['Buenaventura z15', 3.884, -77.069],
+  ['Quibdo z15',       5.694, -76.658],
+  ['Timbio z15',       2.354, -76.684],
+  ['El Bordo z15',     2.120, -76.977],
 ];
-for(const [n, la, lo] of CORE) addCity(n, la, lo, 0.05, 14, 14);
+for(const [n, la, lo] of CORE) addCity(n, la, lo, 0.05, 14, 15);
 
 const arr = Array.from(tiles);
 console.error(`TOTAL: ${arr.length} tiles  (~${Math.round(arr.length*14/1024*10)/10} MB aprox @14KB/tile)`);

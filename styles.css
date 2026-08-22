@@ -99,6 +99,8 @@ body{
   display:flex;align-items:center;justify-content:center;cursor:pointer
 }
 .map-ctrls button:active{transform:scale(.94)}
+.map-ctrls button.busy{opacity:.55;animation:dlpulse 1s ease-in-out infinite}
+@keyframes dlpulse{0%,100%{opacity:.55}50%{opacity:1}}
 /* FILTROS DEL MAPA: barra de chips bajo el buscador para mostrar/ocultar cada tipo y ver solo lo que falta.
    Chip lleno = ese tipo se está viendo; chip apagado = oculto. Así el mapa no se satura. */
 .map-filtros{position:absolute;top:66px;left:56px;right:66px;z-index:640;display:flex;gap:6px;

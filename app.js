@@ -1142,6 +1142,61 @@ function baseTiles(){
     attribution:'© OpenStreetMap · © CARTO'
   });
 }
+/* DESCARGAR MI ZONA para uso SIN internet (la solución real: nadie puede mostrar mapa que nunca
+   bajó, así que mientras HAYA señal el usuario baja SU zona exacta a nivel calle). Recorre los
+   tiles del recuadro que se está viendo, de z11 hasta z17 (nombres de calle + ubicar preciso), y
+   los pide con fetch: el service worker los intercepta y los guarda en su caché de tiles → esa
+   zona queda nítida y navegable offline, y se pueden marcar puntos con precisión. Sólo AGREGA a
+   la caché (no toca datos, es 100% reversible). Bandeja de progreso propia, en lotes chicos para
+   no ahogar la señal débil ni que el proveedor de mapas corte por abuso. */
+function _lon2tx(lon,z){ return Math.floor((lon+180)/360*Math.pow(2,z)); }
+function _lat2ty(lat,z){ const r=lat*Math.PI/180; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z)); }
+function _tilesZona(b, zmin, zmax){
+  const urls=[];
+  for(let z=zmin; z<=zmax; z++){
+    const x0=_lon2tx(b.getWest(),z),  x1=_lon2tx(b.getEast(),z);
+    const y0=_lat2ty(b.getNorth(),z), y1=_lat2ty(b.getSouth(),z); // y crece hacia el sur
+    for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++)
+      urls.push('https://a.basemaps.cartocdn.com/rastertiles/voyager/'+z+'/'+x+'/'+y+'.png');
+  }
+  return Array.from(new Set(urls));
+}
+let _dlEnCurso=false;
+async function descargarZona(){
+  if(!state.map || _dlEnCurso) return;
+  if(!navigator.onLine){ toast('Necesitas señal para descargar tu zona. Hazlo cuando tengas internet y luego funciona sin señal.'); return; }
+  const b=state.map.getBounds();
+  const ZMIN=11, ZMAX=17;               // z17 = nivel calle fino, para leer direcciones y marcar preciso
+  const urls=_tilesZona(b, ZMIN, ZMAX);
+  if(urls.length > 2600){ toast('El área es muy grande. Acércate a TU zona (tu pueblo o barrio) y vuelve a tocar Descargar.'); return; }
+  _dlEnCurso=true;
+  const btn=document.getElementById('btn-download'); if(btn){ btn.classList.add('busy'); btn.disabled=true; }
+  // bandeja de progreso (se crea al vuelo; no ensucia el HTML)
+  let bar=document.getElementById('dl-prog');
+  if(!bar){ bar=document.createElement('div'); bar.id='dl-prog';
+    bar.style.cssText='position:absolute;left:50%;top:76px;transform:translateX(-50%);z-index:900;background:rgba(20,28,60,.94);color:#fff;padding:10px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.3);max-width:88vw;text-align:center';
+    (document.getElementById('screen-mapa')||document.body).appendChild(bar); }
+  bar.style.display='block';
+  const total=urls.length; let hechos=0, ok=0; const LOTE=6;
+  try{
+    for(let i=0;i<total;i+=LOTE){
+      await Promise.allSettled(urls.slice(i,i+LOTE).map(u=>
+        fetch(u).then(r=>{ if(r&&(r.ok||r.type==='opaque')) ok++; }).catch(()=>{})));
+      hechos=Math.min(total,i+LOTE);
+      const pct=Math.round(hechos/total*100);
+      bar.textContent='⬇️ Guardando tu zona para sin internet… '+pct+'%';
+      if(!navigator.onLine){ throw new Error('sin señal'); }
+    }
+    bar.textContent='✅ Listo: esta zona ya funciona sin internet';
+    toast('Zona guardada · ahora se ve y se marca sin señal');
+  }catch(e){
+    bar.textContent='⚠️ Se cortó la señal. Guardé '+ok+' de '+total+'. Reintenta con mejor internet.';
+  }finally{
+    _dlEnCurso=false;
+    if(btn){ btn.classList.remove('busy'); btn.disabled=false; }
+    setTimeout(()=>{ if(bar) bar.style.display='none'; }, 4200);
+  }
+}
 function initMap(){
   if(state.map) return;
   state.map = L.map('map',{zoomControl:true, tap:true}).setView([4.6,-74.1], 6); // Colombia
@@ -1153,6 +1208,7 @@ function initMap(){
   if(bl) bl.onclick=()=>locateMe(true);
   if(bf) bf.onclick=()=>{ userMoved=false; mapFitDone=false; fitToPoints(); };
   if(ba) ba.onclick=()=>{ state.showAnclas = (state.showAnclas===false); ba.classList.toggle('off', state.showAnclas===false); renderMap(); };
+  const bd=$('#btn-download'); if(bd) bd.onclick=descargarZona;
   wireFiltros();
   initMapSearch();
   // ubicar al usuario suave al abrir (sin forzar si ya movió)
