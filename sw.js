@@ -1,4 +1,4 @@
-const APP='ayuda-v53';
+const APP='ayuda-v54';
 const TILES='ayuda-tiles-v3';
 const BASE='ayuda-base-v2';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal)
 importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
