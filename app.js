@@ -1073,12 +1073,70 @@ let mapFitDone=false, userMoved=false, meMarker=null;
 // no como los tiles crudos de OSM que dejan las zonas rurales casi en blanco.
 // updateWhenIdle:false + keepBuffer alto → los tiles se piden mientras se mueve y quedan
 // pre-cargados alrededor, así el mapa se ve "ya cargado" y no en blanco/borroso.
+// Capa de tiles con RESPALDO por "tile-padre": si un recuadro del mapa no está cacheado
+// (sin señal, o a un zoom que no se precargó) en vez de quedar AZUL toma el tile de la zona
+// MÁS AMPLIA que sí está guardada (país/región de Colombia, siempre en caché) y lo AMPLÍA al
+// recuadro que falta. Resultado: el mapa de las zonas del terremoto NUNCA queda en blanco sin
+// internet — se ve algo (más borroso a mucho zoom, pero siempre hay mapa). Online no cambia
+// nada: baja el tile real; el respaldo solo actúa cuando un tile no puede cargar.
+if(typeof L!=='undefined' && !L.TileLayer.Respaldo){
+  L.TileLayer.Respaldo = L.TileLayer.extend({
+    createTile: function(coords, done){
+      const tile = document.createElement('img');
+      tile.setAttribute('role','presentation'); tile.alt='';
+      L.DomEvent.on(tile,'load',  L.Util.bind(this._tileOnLoad, this, done, tile));
+      L.DomEvent.on(tile,'error', L.Util.bind(this._respaldo,  this, done, tile, coords, 1));
+      if(this.options.crossOrigin || this.options.crossOrigin===''){
+        tile.crossOrigin = this.options.crossOrigin===true ? '' : this.options.crossOrigin;
+      }
+      tile.src = this.getTileUrl(coords);
+      return tile;
+    },
+    // Construye la URL de un tile a un zoom EXPLÍCITO (getTileUrl usa el zoom actual del mapa,
+    // no sirve para pedir el padre). Un solo subdominio 'a', sin retina → calza con el caché.
+    _urlZ: function(x,y,z){
+      const s=(typeof this.options.subdomains==='string'?this.options.subdomains[0]:(this.options.subdomains&&this.options.subdomains[0]))||'a';
+      return L.Util.template(this._url, L.Util.extend({r:'', s:s, x:x, y:y, z:z}, this.options));
+    },
+    // up = cuántos niveles subimos buscando un padre cacheado (1 = padre directo)
+    _respaldo: function(done, tile, coords, up){
+      const z = coords.z - up;
+      if(z < 4){                       // ya no hay padre útil: deja el recuadro transparente (no azul)
+        tile.style.visibility='hidden';
+        this._tileOnLoad(done, tile);
+        return;
+      }
+      const self=this, step=Math.pow(2,up);
+      const ax=Math.floor(coords.x/step), ay=Math.floor(coords.y/step);
+      const img=new Image();
+      if(this.options.crossOrigin || this.options.crossOrigin===''){
+        img.crossOrigin = this.options.crossOrigin===true ? '' : this.options.crossOrigin;
+      }
+      img.onload=function(){
+        try{
+          const S=(self.getTileSize&&self.getTileSize().x)||256;
+          const cell=S/step;                                   // porción del padre que cubre este tile
+          const sx=(coords.x-ax*step)*cell, sy=(coords.y-ay*step)*cell;
+          const cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+          const ctx=cv.getContext('2d');
+          ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+          ctx.drawImage(img, sx, sy, cell, cell, 0, 0, S, S); // recorta el cuadrante y lo amplía
+          tile.src=cv.toDataURL('image/png');                 // al cargar dispara 'load' → _tileOnLoad
+        }catch(err){ self._respaldo(done, tile, coords, up+1); } // canvas "tainted": sube otro nivel
+      };
+      img.onerror=function(){ self._respaldo(done, tile, coords, up+1); }; // ese padre tampoco está: sube
+      img.src=self._urlZ(ax,ay,z);
+    }
+  });
+}
 function baseTiles(){
   // URLs DETERMINISTAS (un solo subdominio 'a', sin retina) → cada tile tiene UNA sola URL,
   // así el mapa base de Colombia precargado en el service worker (base-tiles.js) calza EXACTO
   // y se ve al instante aunque no haya señal. keepBuffer alto + tiles de bajo zoom precargados
-  // → nunca queda en blanco: si falta el detalle de calle, se ve igual el país/región debajo.
-  return L.tileLayer('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
+  // + capa Respaldo → NUNCA queda en blanco: si falta el detalle de calle o el zoom, se amplía
+  // la región de abajo que sí está guardada, en vez de mostrar azul.
+  const Cls = (typeof L!=='undefined' && L.TileLayer.Respaldo) ? L.TileLayer.Respaldo : L.TileLayer;
+  return new Cls('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
     subdomains:'a', maxZoom:20, detectRetina:false, crossOrigin:true,
     updateWhenIdle:false, updateWhenZooming:false, keepBuffer:8,
     attribution:'© OpenStreetMap · © CARTO'

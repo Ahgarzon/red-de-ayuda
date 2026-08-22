@@ -75,10 +75,21 @@ const BIG = [
   ['Quibdo z13',       5.694, -76.658],
 ];
 for(const [n, la, lo] of BIG) addCity(n, la, lo, 0.10, 13, 13);
+// Cascos urbanos donde de verdad se marca y se hace mucho zoom → nivel CALLE FINO (z14) para que
+// offline se vea NÍTIDO, no solo ampliado por el respaldo. Radio chico para no inflar la descarga.
+const CORE = [
+  ['Popayan z14',      2.444, -76.614],
+  ['Cali z14',         3.451, -76.532],
+  ['Buenaventura z14', 3.884, -77.069],
+  ['Quibdo z14',       5.694, -76.658],
+  ['Timbio z14',       2.354, -76.684],
+  ['El Bordo z14',     2.120, -76.977],
+];
+for(const [n, la, lo] of CORE) addCity(n, la, lo, 0.05, 14, 14);
 
 const arr = Array.from(tiles);
 console.error(`TOTAL: ${arr.length} tiles  (~${Math.round(arr.length*14/1024*10)/10} MB aprox @14KB/tile)`);
-const header = `/* Mapa base de Colombia para uso SIN señal. Capas: país (z4-7), suroccidente (z8-9),\n   Choco+Valle+Cauca completos (z10-11) y cabeceras clave a nivel barrio (z12-13), para poder\n   MARCAR un punto en la zona afectada aunque no cargue internet. Generado por\n   scripts/gen-base-tiles.mjs — NO editar a mano. */\n`;
+const header = `/* Mapa base de Colombia para uso SIN señal. Capas: país (z4-7), suroccidente (z8-9),\n   Choco+Valle+Cauca (z10), cabeceras a nivel barrio (z11-12) y cascos urbanos clave a nivel\n   CALLE FINO (z13-14). Combinado con la capa Respaldo (app.js: si falta un tile se amplía el\n   de la región de abajo ya cacheada), el mapa de la zona del terremoto NUNCA queda azul sin\n   señal. Generado por scripts/gen-base-tiles.mjs — NO editar a mano. */\n`;
 const out = header + 'self.BASE_TILES=' + JSON.stringify(arr) + ';\n';
 fs.writeFileSync(new URL('../base-tiles.js', import.meta.url), out);
 console.error('Escrito base-tiles.js');
