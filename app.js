@@ -1151,6 +1151,11 @@ function baseTiles(){
    no ahogar la señal débil ni que el proveedor de mapas corte por abuso. */
 function _lon2tx(lon,z){ return Math.floor((lon+180)/360*Math.pow(2,z)); }
 function _lat2ty(lat,z){ const r=lat*Math.PI/180; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z)); }
+function _countTilesZ(b,z){ // cuántos tiles ocupa el recuadro en ESE zoom (sin construir la lista)
+  const x0=_lon2tx(b.getWest(),z),  x1=_lon2tx(b.getEast(),z);
+  const y0=_lat2ty(b.getNorth(),z), y1=_lat2ty(b.getSouth(),z);
+  return (Math.abs(x1-x0)+1)*(Math.abs(y1-y0)+1);
+}
 function _tilesZona(b, zmin, zmax){
   const urls=[];
   for(let z=zmin; z<=zmax; z++){
@@ -1166,9 +1171,19 @@ async function descargarZona(){
   if(!state.map || _dlEnCurso) return;
   if(!navigator.onLine){ toast('Necesitas señal para descargar tu zona. Hazlo cuando tengas internet y luego funciona sin señal.'); return; }
   const b=state.map.getBounds();
-  const ZMIN=11, ZMAX=17;               // z17 = nivel calle fino, para leer direcciones y marcar preciso
-  const urls=_tilesZona(b, ZMIN, ZMAX);
-  if(urls.length > 2600){ toast('El área es muy grande. Acércate a TU zona (tu pueblo o barrio) y vuelve a tocar Descargar.'); return; }
+  // ZOOM MÁXIMO ADAPTATIVO: en vez de rechazar las áreas grandes, bajamos el detalle máximo
+  // lo justo para que TODA la zona quepa dentro del presupuesto. Área chica (un barrio) → llega
+  // a z17 (nivel calle, se leen direcciones y se marca preciso); área grande (una ciudad o una
+  // región entera) → se guarda completa a z16/15/14 (igual navegable), en vez de no bajar nada.
+  const ZMIN=10, ZTOP=17, BUDGET=7000;  // 7000 ≈ 2.7× lo de antes; el tope real lo pone el zoom adaptativo
+  let zmax=ZTOP;
+  while(zmax>ZMIN){
+    let t=0; for(let z=ZMIN;z<=zmax;z++) t+=_countTilesZ(b,z);
+    if(t<=BUDGET) break;
+    zmax--;
+  }
+  const nivel = zmax>=17?'nivel calle' : zmax>=16?'nivel barrio' : zmax>=14?'nivel ciudad' : 'nivel región';
+  const urls=_tilesZona(b, ZMIN, zmax);
   _dlEnCurso=true;
   const btn=document.getElementById('btn-download'); if(btn){ btn.classList.add('busy'); btn.disabled=true; }
   // bandeja de progreso (se crea al vuelo; no ensucia el HTML)
@@ -1177,17 +1192,20 @@ async function descargarZona(){
     bar.style.cssText='position:absolute;left:50%;top:76px;transform:translateX(-50%);z-index:900;background:rgba(20,28,60,.94);color:#fff;padding:10px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.3);max-width:88vw;text-align:center';
     (document.getElementById('screen-mapa')||document.body).appendChild(bar); }
   bar.style.display='block';
-  const total=urls.length; let hechos=0, ok=0; const LOTE=6;
+  const total=urls.length; let hechos=0, ok=0; const LOTE=8;
   try{
     for(let i=0;i<total;i+=LOTE){
       await Promise.allSettled(urls.slice(i,i+LOTE).map(u=>
         fetch(u).then(r=>{ if(r&&(r.ok||r.type==='opaque')) ok++; }).catch(()=>{})));
       hechos=Math.min(total,i+LOTE);
       const pct=Math.round(hechos/total*100);
-      bar.textContent='⬇️ Guardando tu zona para sin internet… '+pct+'%';
+      bar.textContent='⬇️ Guardando tu zona ('+nivel+') para sin internet… '+pct+'%';
+      // Cede el hilo entre lotes: deja que la pantalla se repinte y responda al toque
+      // (así el mapa no se "traba" mientras se bajan miles de tiles).
+      await new Promise(r=>setTimeout(r, 0));
       if(!navigator.onLine){ throw new Error('sin señal'); }
     }
-    bar.textContent='✅ Listo: esta zona ya funciona sin internet';
+    bar.textContent='✅ Listo: esta zona ('+nivel+') ya funciona sin internet';
     toast('Zona guardada · ahora se ve y se marca sin señal');
   }catch(e){
     bar.textContent='⚠️ Se cortó la señal. Guardé '+ok+' de '+total+'. Reintenta con mejor internet.';
