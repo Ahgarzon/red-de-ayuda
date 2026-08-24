@@ -203,6 +203,9 @@ function trustLevel(p){
 }
 /* % para la barrita de confianza (5–100) */
 function trustPct(p){ return Math.max(5, Math.min(100, Math.round(50 + trustScore(p)*12))); }
+/* resumen corto de votos de la comunidad — para el popup del mapa y el tablero de entidad,
+   donde solo se veía el sello (Confiable/Dudoso) pero NO cuánta gente lo respaldó. Vacío si nadie votó. */
+function votosResumen(p){ const c=(+p.votos_confia||0), d=(+p.votos_duda||0); return (c||d)?`👍 ${c} · 👎 ${d}`:''; }
 /* comparador: los lugares marcados "Dudoso" por la comunidad van al final de la lista
    (bajándolos, como pidió Angel) — nunca se borran, solo se hunden y se atenúan. */
 function dudoRank(x,y){ return (trustLevel(x).k==='baja'?1:0)-(trustLevel(y).k==='baja'?1:0); }
@@ -630,7 +633,7 @@ function entRow(p){
   return `<div class="ent-swipe${canSwipe?' swipeable':''}"${canSwipe?` data-swipe="${p.id}"`:''}>
     <div class="swipe-bg">↩︎ suelta para liberar</div>
     <div class="tab-row ${c}">
-      <div class="tr-main"><b>${esc(p.nombre)}</b><span>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} pers.</span>${entWho(p)}</div>
+      <div class="tr-main"><b>${esc(p.nombre)}</b><span>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))} · ${p.personas||0} pers.</span>${(function(){const lvl=trustLevel(p),vr=votosResumen(p);return `<span class="tr-trust" style="color:${lvl.col}">${lvl.ico} ${lvl.txt}${vr?' · '+vr:''}</span>`;})()}${entWho(p)}</div>
       <div class="tr-act">${acts}</div>
     </div>
   </div>`;
@@ -1400,7 +1403,8 @@ function renderMap(){
       ? L.marker([p.lat,p.lng],{icon:pinIcon(ENT_MK[et].c, ENT_MK[et].e)})
       : L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:lvl.k==='baja'?.55:.98});
     const falta=(p.faltan||[]).join(', ');
-    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${anc?' · 📍 '+esc(anc.n):''}${atnPopup(p)}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
+    const vr=votosResumen(p);   // votos de la comunidad (para que las entidades regulen con el dato a la vista)
+    m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${vr?' · '+vr:''}${anc?' · 📍 '+esc(anc.n):''}${atnPopup(p)}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
     m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,et?-44:-10],className:'mk-label'});
     state.markers.addLayer(m);
     state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});

@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='59';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var RUNNING='61';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
   var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
@@ -80,7 +80,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-<link rel="stylesheet" href="styles.css?v=60" />
+<link rel="stylesheet" href="styles.css?v=61" />
 <!-- SPLASH CRÍTICO (estilos EN LÍNEA, sin depender de styles.css). Se pinta al instante y
      evita el "blanco puro" en señal débil o en el navegador de Facebook/Instagram (que no
      tienen Service Worker). boot() lo oculta; si la app no arranca en 9s, ofrece Reintentar. -->
@@ -379,7 +379,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="gazetteer.js"></script>
-<script src="app.js?v=60"></script>
+<script src="app.js?v=61"></script>
 <!-- RED DE SEGURIDAD del splash: si en 9s la app no arrancó (JS roto, recurso colgado o
      navegador que bloquea todo), mostramos "Reintentar" para que el usuario no quede atrapado
      en una pantalla que gira para siempre. Va en su PROPIO <script>: corre aunque app.js falle. -->
