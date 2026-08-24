@@ -727,8 +727,22 @@ function updateEntBanner(){
   else b.classList.add('hidden');
 }
 
+/* Viste TODA la app de "modo entidad" (tema rojo de centro de mando) mientras hay una entidad
+   logueada. Pone/quita la clase .ent-modo en #app (el CSS hace el resto: paleta roja, marco del
+   mapa, tinte) y llena la franja "MODO ENTIDAD" que va arriba del mapa. Sin entidad → todo normal. */
+function updateEntTheme(){
+  const app=$('#app'); const e=entidad();
+  const on=!!(e&&e.codigo);
+  if(app) app.classList.toggle('ent-modo', on);
+  const mb=$('#ent-map-banner');
+  if(mb){
+    if(on){ mb.classList.remove('hidden'); mb.innerHTML=`🚨 MODO ENTIDAD · <b>${esc(TIPO_LBL[e.tipo]||'Entidad')}</b>${e.nombre?' · '+esc(e.nombre):''}`; }
+    else mb.classList.add('hidden');
+  }
+}
+
 /* ================= RENDER ================= */
-function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); renderDesaparecidos(); updatePending(); updateEntBanner(); }
+function renderAll(){ renderPuntos(); renderMap(); renderEntregas(); renderFuentes(); renderAportes(); renderDesaparecidos(); updatePending(); updateEntBanner(); updateEntTheme(); }
 
 let filtroDepto='__all';
 let ordenPuntos='urgencia';   // 'urgencia' | 'cercania'

@@ -575,3 +575,45 @@ textarea{min-height:74px;resize:vertical}
 .ent-swipe .tab-row{position:relative;will-change:transform}
 .ent-swipe.swipeable .tab-row{touch-action:pan-y}
 .ent-swipe.armed .swipe-bg{filter:brightness(1.08)}
+
+/* ================= MODO ENTIDAD · TEMA ROJO DE CENTRO DE MANDO =================
+   Cuando una entidad aprobada inicia sesión, TODA la app se "viste" distinta para que se
+   sepa al instante que NO es la vista ciudadana normal: paleta roja (cabecera, navegación,
+   botones), un MARCO ROJO alrededor del mapa, el mapa entintado en rojo y una franja
+   "MODO ENTIDAD" arriba del mapa. Se activa con la clase .ent-modo en #app (la pone el JS
+   solo mientras hay entidad logueada) → 100% reversible: sin la clase, todo vuelve a normal. */
+#app.ent-modo{
+  --accent:#dc2626; --accent-2:#ef4444; --accent-soft:#fde3e3;
+  --header:linear-gradient(125deg,#7f1d1d 0%,#dc2626 100%);
+}
+/* botones con sombra azul "quemada" en el código → en modo entidad va roja */
+#app.ent-modo .fab{box-shadow:0 8px 20px rgba(220,38,38,.45)}
+#app.ent-modo .fab-full{box-shadow:0 6px 16px rgba(220,38,38,.34)}
+/* el corazón/logo de la cabecera se resalta en modo mando */
+#app.ent-modo .topbar{box-shadow:inset 0 -3px 0 #fca5a5}
+
+/* MARCO ROJO alrededor del mapa (overlay que no intercepta toques) */
+#app.ent-modo #screen-mapa::after{
+  content:"";position:absolute;inset:0;z-index:690;pointer-events:none;
+  border:4px solid #dc2626;border-radius:2px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.85), inset 0 0 34px rgba(220,38,38,.35);
+}
+/* el mapa se entinta en rojo (sutil, sigue siendo legible) */
+#app.ent-modo #screen-mapa .leaflet-tile-pane{
+  filter:saturate(.62) contrast(1.03) sepia(.28) hue-rotate(-14deg) brightness(.99);
+}
+
+/* FRANJA "MODO ENTIDAD" arriba del mapa */
+.ent-map-banner{position:absolute;top:0;left:0;right:0;z-index:700;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  height:38px;padding:0 14px;
+  background:linear-gradient(90deg,#b91c1c,#dc2626,#b91c1c);color:#fff;
+  font-size:13.5px;font-weight:800;letter-spacing:.02em;
+  box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.ent-map-banner.hidden{display:none}
+.ent-map-banner b{font-weight:900}
+/* con la franja arriba, los controles del mapa bajan para no quedar tapados */
+#app.ent-modo #screen-mapa .map-search{top:50px}
+#app.ent-modo #screen-mapa .map-filtros{top:104px}
+#app.ent-modo #screen-mapa .map-ctrls{top:50px}
+#app.ent-modo #screen-mapa .map-legend{top:158px}
