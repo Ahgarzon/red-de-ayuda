@@ -478,6 +478,8 @@ textarea{min-height:74px;resize:vertical}
 .popup-atn{display:inline-block;margin:6px 6px 0 0;padding:7px 11px;border-radius:10px;border:none;
   background:#2563eb;color:#fff;font-weight:800;font-size:13px;cursor:pointer}
 .popup-atn.done{background:#16a34a}
+.popup-atn.del{background:#b91c1c}
+.btn-mini.danger{background:#fee2e2;border-color:#fecaca;color:#b91c1c;font-weight:800}
 /* Líneas de emergencia */
 .lineas-card{border-left:5px solid var(--rojo)}
 .lineas-sub{margin:0 0 13px;color:var(--text-soft);font-size:14.5px;line-height:1.4}

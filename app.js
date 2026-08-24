@@ -471,6 +471,15 @@ function askConfirm(title, msg, cb){
 const ENT_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-entidad';
 const TIPOS_ENT = [['ambulancia','🚑 Ambulancia'],['bomberos','🚒 Bomberos'],['cruz_roja','➕ Cruz Roja'],['defensa_civil','🛟 Defensa Civil'],['policia','👮 Policía'],['ejercito','🎖️ Ejército'],['hospital','🏥 Hospital / Salud'],['alcaldia','🏛️ Alcaldía / Gobierno'],['otro','🤝 Otra entidad']];
 const TIPO_LBL = Object.fromEntries(TIPOS_ENT.map(([k,v])=>[k,v]));
+/* Logo (emoji) y color por tipo de entidad → así en el mapa se ve QUIÉN atiende cada punto:
+   una Cruz Roja se ve con su cruz, una ambulancia con su 🚑, bomberos 🚒, etc. */
+const ENT_MK = {
+  ambulancia:{e:'🚑',c:'#dc2626'}, bomberos:{e:'🚒',c:'#ea580c'}, cruz_roja:{e:'➕',c:'#dc2626'},
+  defensa_civil:{e:'🛟',c:'#f59e0b'}, policia:{e:'👮',c:'#1d4ed8'}, ejercito:{e:'🎖️',c:'#4d7c0f'},
+  hospital:{e:'🏥',c:'#0891b2'}, alcaldia:{e:'🏛️',c:'#7c3aed'}, operador:{e:'🛡️',c:'#334155'}, otro:{e:'🤝',c:'#334155'}
+};
+/* tipo de la entidad que tomó un punto, a partir de "tipo · Nombre" (null si nadie lo atiende) */
+function entTipoDe(p){ const s=p&&p.atendido_nombre; if(!s) return null; const i=String(s).indexOf(' · '); const t=(i<0?String(s):String(s).slice(0,i)).trim(); return ENT_MK[t]?t:null; }
 let entOpen=false;
 let entFiltro='crit';   // crit | sin | cam | res  — cuál cifra está seleccionada
 let entMuni=null;       // filtra la lista por municipio (desde "dónde se concentra")
@@ -498,8 +507,26 @@ function atnPopup(p){
     if(a==='sin_atender') s+=`<br><button class="popup-atn" onclick="atender('${p.id}','en_camino')">🚑 Voy</button> <button class="popup-atn done" onclick="atender('${p.id}','resuelto')">✅ Resuelto</button>`;
     else if(a==='en_camino') s+=`<br><button class="popup-atn done" onclick="atender('${p.id}','resuelto')">✅ Resuelto</button> <button class="popup-atn" onclick="atender('${p.id}','sin_atender')">↩︎ Liberar</button>`;
     else s+=`<br><button class="popup-atn" onclick="atender('${p.id}','sin_atender')">↩︎ Reabrir</button>`;
+    s+=` <button class="popup-atn del" onclick="entQuitar('${p.id}')">🗑 Quitar del mapa</button>`;
   }
   return s;
+}
+/* Una entidad aprobada QUITA un punto del mapa (falso, duplicado o ya resuelto): lo ARCHIVA en la
+   base (queda recuperable por el equipo, nunca se borra) y desaparece del mapa y las listas de la
+   comunidad al instante. La base valida el permiso por el código de la entidad. */
+async function entQuitar(id){
+  const e=entidad(); if(!e||!e.codigo){ toast('Entra como entidad primero'); openEntidad(); return; }
+  askConfirm('¿Quitar este punto del mapa?','Se archiva (no se borra: el equipo lo puede recuperar) y deja de verse para la comunidad.', async ()=>{
+    try{
+      const res=await api('moderar','puntos',{id, codigo:e.codigo, modo:'archivar'});
+      const ok = res && (res.ok===true || (Array.isArray(res) && res[0] && res[0].ok===true));
+      if(ok){
+        const i=state.puntos.findIndex(x=>String(x.id)===String(id));
+        if(i>=0){ state.puntos[i]=Object.assign({}, state.puntos[i], {archivado:true}); cache(LS.puntos, state.puntos); }
+        renderAll(); if(entOpen) renderEntidad(); toast('Punto quitado del mapa ✅');
+      } else { toast('Tu entidad aún no puede quitar puntos. Avísale al equipo.'); }
+    }catch(err){ toast('No se pudo quitar (revisa tu internet).'); }
+  });
 }
 /* Cambiar el estado de atención de un punto. La base exige entidad APROBADA (por su código);
    si no lo está, devuelve error y no cambia nada. No se encola offline: es una acción de
@@ -598,6 +625,7 @@ function entRow(p){
   if(a==='sin_atender') acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy</button>`;
   else if(a==='en_camino') acts=`<button class="btn-mini atn done" data-atender="resuelto:${p.id}">✅ Resuelto</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Deshacer</button>`;
   else acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Reabrir</button>`;
+  acts+=`<button class="btn-mini danger" data-quitar="${p.id}" title="Quitar del mapa (se archiva, recuperable)">🗑</button>`;
   const canSwipe = a==='en_camino';
   return `<div class="ent-swipe${canSwipe?' swipeable':''}"${canSwipe?` data-swipe="${p.id}"`:''}>
     <div class="swipe-bg">↩︎ suelta para liberar</div>
@@ -663,6 +691,7 @@ function wireEntidad(body){
   const sl=body.querySelector('#ent-salir'); if(sl) sl.onclick=salirEntidad;
   const rt=body.querySelector('#ent-rotar'); if(rt) rt.onclick=rotarCodigoEntidad;
   body.querySelectorAll('[data-atender]').forEach(b=>b.onclick=()=>{ const s=b.dataset.atender,i=s.indexOf(':'); atender(s.slice(i+1),s.slice(0,i)); });
+  body.querySelectorAll('[data-quitar]').forEach(b=>b.onclick=()=>entQuitar(b.dataset.quitar));
   body.querySelectorAll('[data-vermapa2]').forEach(b=>b.onclick=()=>{ const p=state.puntos.find(x=>String(x.id)===String(b.dataset.vermapa2)); closeEntidad(); if(p&&p.lat!=null){ go('mapa'); backToEntidad=true; userMoved=true; setTimeout(()=>state.map&&state.map.setView([p.lat,p.lng],15),300);} });
   // cifras del tablero CLICABLES → filtran la lista de abajo
   body.querySelectorAll('[data-entf]').forEach(el=>el.onclick=()=>{ entFiltro=el.dataset.entf; entMuni=null; renderEntidad(); });
@@ -1359,15 +1388,20 @@ function renderMap(){
     if(!puntoMatchItem(p)) return;
     const c=color(p);
     const lvl=trustLevel(p), anc=anclaDe(p);
+    const et=entTipoDe(p);   // ¿una entidad tomó este punto? → se pinta con SU logo (Cruz Roja, ambulancia…)
     // ARO DE CONFIANZA (eje aparte del semáforo): verde=confiable, rojo punteado=dudoso.
     // El color del PIN sigue siendo "qué falta" (rojo/verde); el aro NO se pisa con eso.
     if(lvl.k!=='media'){
-      state.markers.addLayer(L.circleMarker([p.lat,p.lng],{radius:18,color:lvl.col,weight:3,opacity:.9,fill:false,dashArray:lvl.k==='baja'?'4 5':null,interactive:false}));
+      state.markers.addLayer(L.circleMarker([p.lat,p.lng],{radius:et?20:18,color:lvl.col,weight:3,opacity:.9,fill:false,dashArray:lvl.k==='baja'?'4 5':null,interactive:false}));
     }
-    const m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:lvl.k==='baja'?.55:.98});
+    // Si una entidad atiende el punto, se dibuja un PIN con su logo (se sabe quién lo tiene);
+    // si no, el círculo de color de siempre (qué falta / semáforo).
+    const m = et
+      ? L.marker([p.lat,p.lng],{icon:pinIcon(ENT_MK[et].c, ENT_MK[et].e)})
+      : L.circleMarker([p.lat,p.lng],{radius:13,color:'#fff',weight:3,fillColor:cols[c],fillOpacity:lvl.k==='baja'?.55:.98});
     const falta=(p.faltan||[]).join(', ');
     m.bindPopup(`<b>${esc(p.nombre)}</b><br>${esc([p.municipio,p.departamento].filter(Boolean).join(', '))}<br>${p.personas||0} personas · <b>${LABELS[c]}</b>${falta?'<br>Falta: '+esc(falta):''}${p.necesita_rescate?'<br>🚨 Rescatistas':''}<br>${lvl.ico} <b>${lvl.txt}</b>${anc?' · 📍 '+esc(anc.n):''}${atnPopup(p)}<br><a href="${mapsDir(p.lat,p.lng)}" target="_blank" rel="noopener" class="popup-go">🧭 Cómo llegar</a>`);
-    m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,-10],className:'mk-label'});
+    m.bindTooltip(esc(p.nombre),{permanent:true,direction:'top',offset:[0,et?-44:-10],className:'mk-label'});
     state.markers.addLayer(m);
     state._mk.push({nombre:p.nombre,muni:[p.municipio,p.departamento].filter(Boolean).join(', '),lat:p.lat,lng:p.lng,m});
   });
