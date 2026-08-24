@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='62';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var RUNNING='63';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
   var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})

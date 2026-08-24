@@ -446,6 +446,8 @@ function askText(title, msg, placeholder, cb){
   $('#ask-title').textContent=title;
   $('#ask-msg').textContent=msg||''; $('#ask-msg').style.display=msg?'block':'none';
   inp.style.display='block'; inp.value=''; inp.placeholder=placeholder||'';
+  const box=document.getElementById('ask-motivos'); if(box) box.style.display='none';
+  $('#ask-ok').disabled=false; $('#ask-ok').classList.remove('is-off');
   $('#ask-ok').textContent='Aceptar';
   m.classList.remove('hidden'); setTimeout(()=>inp.focus(),120);
   $('#ask-ok').onclick=()=>{ m.classList.add('hidden'); cb(inp.value.trim()); };
@@ -457,11 +459,42 @@ function askConfirm(title, msg, cb){
   $('#ask-title').textContent=title;
   $('#ask-msg').textContent=msg||''; $('#ask-msg').style.display=msg?'block':'none';
   inp.style.display='none';
-  $('#ask-ok').textContent='Sí, eliminar';
+  const box=document.getElementById('ask-motivos'); if(box) box.style.display='none';
+  const ok=$('#ask-ok'); ok.disabled=false; ok.classList.remove('is-off');
+  ok.textContent='Sí, eliminar';
   m.classList.remove('hidden');
-  $('#ask-ok').onclick=()=>{ m.classList.add('hidden'); cb(true); };
+  ok.onclick=()=>{ m.classList.add('hidden'); cb(true); };
   $('#ask-cancel').onclick=()=>{ m.classList.add('hidden'); };
   m.onclick=e=>{ if(e.target.id==='ask') m.classList.add('hidden'); };
+}
+/* Confirmación REFORZADA para quitar un punto (evita borrados por equivocación): la entidad
+   DEBE elegir un motivo antes de que se habilite el botón "🗑 Quitar". Un solo toque ya no basta;
+   además queda registrado por qué se quitó. Reutiliza el modal #ask. */
+function askQuitar(cb){
+  const m=$('#ask'), inp=$('#ask-input');
+  $('#ask-title').textContent='¿Quitar este punto del mapa?';
+  $('#ask-msg').textContent='Elige el motivo para confirmar. Se archiva (no se borra: el equipo lo puede recuperar) y deja de verse para la comunidad.';
+  $('#ask-msg').style.display='block';
+  inp.style.display='none';
+  let box=document.getElementById('ask-motivos');
+  if(!box){ box=document.createElement('div'); box.id='ask-motivos'; box.className='ask-motivos'; $('#ask-msg').insertAdjacentElement('afterend',box); }
+  const MOT=[['falso','🚫 Es falso'],['duplicado','📑 Duplicado'],['resuelto','✅ Ya resuelto'],['otro','✏️ Otro motivo']];
+  let sel=null;
+  box.style.display='flex';
+  box.innerHTML=MOT.map(([k,v])=>`<button type="button" class="mot-chip" data-mot="${k}">${v}</button>`).join('');
+  const ok=$('#ask-ok');
+  ok.textContent='🗑 Quitar';
+  ok.disabled=true; ok.classList.add('is-off');
+  box.querySelectorAll('.mot-chip').forEach(b=>b.onclick=()=>{
+    sel=b.dataset.mot;
+    box.querySelectorAll('.mot-chip').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    ok.disabled=false; ok.classList.remove('is-off');
+  });
+  m.classList.remove('hidden');
+  ok.onclick=()=>{ if(!sel) return; m.classList.add('hidden'); box.style.display='none'; cb(sel); };
+  $('#ask-cancel').onclick=()=>{ m.classList.add('hidden'); box.style.display='none'; };
+  m.onclick=e=>{ if(e.target.id==='ask'){ m.classList.add('hidden'); box.style.display='none'; } };
 }
 
 /* ================= MODO OPERATIVO · ENTIDADES (Fase 1) =================
@@ -519,9 +552,9 @@ function atnPopup(p){
    comunidad al instante. La base valida el permiso por el código de la entidad. */
 async function entQuitar(id){
   const e=entidad(); if(!e||!e.codigo){ toast('Entra como entidad primero'); openEntidad(); return; }
-  askConfirm('¿Quitar este punto del mapa?','Se archiva (no se borra: el equipo lo puede recuperar) y deja de verse para la comunidad.', async ()=>{
+  askQuitar(async (motivo)=>{
     try{
-      const res=await api('moderar','puntos',{id, codigo:e.codigo, modo:'archivar'});
+      const res=await api('moderar','puntos',{id, codigo:e.codigo, modo:'archivar', motivo});
       const ok = res && (res.ok===true || (Array.isArray(res) && res[0] && res[0].ok===true));
       if(ok){
         const i=state.puntos.findIndex(x=>String(x.id)===String(id));
