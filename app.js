@@ -628,7 +628,7 @@ function entRow(p){
   if(a==='sin_atender') acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn go" data-atender="en_camino:${p.id}">🚑 Voy</button>`;
   else if(a==='en_camino') acts=`<button class="btn-mini atn done" data-atender="resuelto:${p.id}">✅ Resuelto</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Deshacer</button>`;
   else acts=`<button class="btn-mini" data-vermapa2="${p.id}">📍 Mapa</button><button class="btn-mini atn" data-atender="sin_atender:${p.id}">↩︎ Reabrir</button>`;
-  acts+=`<button class="btn-mini danger" data-quitar="${p.id}" title="Quitar del mapa (se archiva, recuperable)">🗑</button>`;
+  acts+=`<button class="btn-mini danger" data-quitar="${p.id}" title="Quitar del mapa (se archiva, recuperable)">🗑 Quitar</button>`;
   const canSwipe = a==='en_camino';
   return `<div class="ent-swipe${canSwipe?' swipeable':''}"${canSwipe?` data-swipe="${p.id}"`:''}>
     <div class="swipe-bg">↩︎ suelta para liberar</div>

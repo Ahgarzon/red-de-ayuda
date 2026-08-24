@@ -256,7 +256,7 @@ body{
 .foot-by{opacity:.7;font-size:12px}
 
 /* MODAL */
-.modal{position:fixed;inset:0;z-index:1000;background:rgba(10,20,26,.5);display:flex;align-items:flex-end;justify-content:center}
+.modal{position:fixed;inset:0;z-index:2000;background:rgba(10,20,26,.5);display:flex;align-items:flex-end;justify-content:center}
 .modal.hidden,.hidden{display:none!important}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:22px 22px 0 0;max-height:92dvh;display:flex;flex-direction:column;animation:up .22s ease}
 @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:translateY(0);opacity:1}}
@@ -545,15 +545,17 @@ textarea{min-height:74px;resize:vertical}
   font-size:14px;color:#1e2a5e;margin-bottom:6px}
 .ent-h3{margin:16px 0 8px;font-size:16px}
 .ent-list{display:flex;flex-direction:column;gap:9px}
-.tab-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  border:1px solid var(--border);border-left:5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.tab-row{display:flex;flex-direction:column;align-items:stretch;gap:10px;
+  border:1px solid var(--border);border-left:5px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--surface)}
 .tab-row.rojo,.tab-row.rescate{border-left-color:var(--rojo)}
 .tab-row.ambar{border-left-color:var(--ambar)}
 .tab-row.verde{border-left-color:var(--verde)}
 .tr-main{display:flex;flex-direction:column;gap:2px;min-width:0}
-.tr-main b{font-size:15px;line-height:1.25}
+.tr-main b{font-size:15.5px;line-height:1.3;word-break:break-word}
 .tr-main span{font-size:12.5px;color:var(--text-soft)}
-.tr-act{display:flex;gap:6px;flex:none}
+.tr-act{display:flex;gap:8px;flex-wrap:wrap}
+.tr-act .btn-mini{flex:1 1 auto;text-align:center;white-space:nowrap;padding:11px 10px}
+.tr-act .btn-mini.danger{flex:0 0 auto;min-width:48px}
 .ent-munis{display:flex;flex-direction:column;gap:6px}
 .muni-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
   background:var(--surface-2);border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
