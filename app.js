@@ -1477,13 +1477,14 @@ function renderMap(){
     state._mk.push({nombre:f.nombre,muni:f.direccion||f.destino||'Centro de acopio',lat:f.lat,lng:f.lng,m});
   });
   // SISMOS (USGS, M4.0+ SOLO Colombia, automático cada 2 min): epicentro con la magnitud
-  // y un círculo = radio donde probablemente se sintió (crece con la magnitud). Solo los
-  // de los últimos 7 días, para que el mapa muestre lo relevante a la emergencia.
+  // y un círculo = radio donde probablemente se sintió (crece con la magnitud). No se dejan
+  // para siempre en el mapa: los fuertes (M6+) se muestran 7 días; el resto (M4–5.9), 3 días.
   if(state.filtros.sismos!==false) vivos('sismos').forEach(s=>{
     if(s.lat==null||s.lng==null) return;
     const t=new Date(s.ocurrido_at).getTime();
-    if(isFinite(t) && (Date.now()-t) > 7*864e5) return;
     const mag=+s.magnitud||0;
+    const diasVivo = mag>=6 ? 7 : 3;   // M6+ 7 días, M4–5.9 3 días
+    if(isFinite(t) && (Date.now()-t) > diasVivo*864e5) return;
     const rkm=Math.min(400, Math.round(30*Math.pow(2.6, mag-4)));   // M4≈30, M5≈80, M6≈200 km
     const col = mag>=6?'#7f1d1d' : mag>=5?'#dc2626' : '#f59e0b';
     let hace='';
