@@ -6,11 +6,12 @@ const GEO_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-geo';
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
   aportes:'ay_aportes', desaparecidos:'ay_desap', avistamientos:'ay_avist',
+  sismos:'ay_sismos',
   queue:'ay_queue', user:'ay_user', entidad:'ay_entidad'
 };
 const ITEMS = ['Agua','Comida','Colchones','Cobijas','Pañales','Medicina','Ropa','Aseo','Carpas','Rescatistas'];
 
-const state = { puntos:[], entregas:[], fuentes:[], aportes:[], desaparecidos:[], avistamientos:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[],
+const state = { puntos:[], entregas:[], fuentes:[], aportes:[], desaparecidos:[], avistamientos:[], sismos:[], queue:[], online:navigator.onLine, map:null, markers:null, myPos:null, myPlace:null, fotos:{}, _mk:[],
   // FILTROS DEL MAPA: para que no se sature. Cada categoría se puede ocultar; 'item' filtra por lo que se necesita.
   filtros:{ puntos:true, acopios:true, entregas:true, item:'' } };
 
@@ -275,7 +276,7 @@ async function pull(table){
 
 async function pullAll(){
   try{ setNet(); }catch(e){}
-  const tablas = ['puntos','entregas','fuentes','aportes','desaparecidos','avistamientos'];
+  const tablas = ['puntos','entregas','fuentes','aportes','desaparecidos','avistamientos','sismos'];
   // Cada tabla se trae POR SEPARADO. Si una falla, NO se toca a las demás y
   // NUNCA se borra lo que ya estaba: pull() solo reemplaza cuando llega un array
   // válido del servidor; ante error conserva lo que había (cache/pendientes).
@@ -1147,6 +1148,12 @@ function pinIcon(fill, glyph){
     </svg>${g}</div>`;
   return L.divIcon({ className:'pin-div', html, iconSize:[34,46], iconAnchor:[17,45], popupAnchor:[0,-40] });
 }
+// EPICENTRO de sismo: círculo con la MAGNITUD adentro (lee al instante en el mapa)
+function sismoIcon(mag,col){
+  return L.divIcon({ className:'sismo-div', html:
+    `<div style="background:${col};color:#fff;border:2px solid #fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.45)">${(+mag).toFixed(1)}</div>`,
+    iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-16] });
+}
 let mapFitDone=false, userMoved=false, meMarker=null;
 // Capa base: CARTO Voyager — se ve limpia y consistente en TODO el país (ciudad y campo),
 // no como los tiles crudos de OSM que dejan las zonas rurales casi en blanco.
@@ -1461,6 +1468,24 @@ function renderMap(){
     m.bindTooltip(esc(f.nombre),{permanent:true,direction:'top',offset:[0,-30],className:'mk-label mk-label-acopio'});
     state.markers.addLayer(m);
     state._mk.push({nombre:f.nombre,muni:f.direccion||f.destino||'Centro de acopio',lat:f.lat,lng:f.lng,m});
+  });
+  // SISMOS (USGS, M4.0+ SOLO Colombia, automático cada 2 min): epicentro con la magnitud
+  // y un círculo = radio donde probablemente se sintió (crece con la magnitud). Solo los
+  // de los últimos 7 días, para que el mapa muestre lo relevante a la emergencia.
+  if(state.filtros.sismos!==false) vivos('sismos').forEach(s=>{
+    if(s.lat==null||s.lng==null) return;
+    const t=new Date(s.ocurrido_at).getTime();
+    if(isFinite(t) && (Date.now()-t) > 7*864e5) return;
+    const mag=+s.magnitud||0;
+    const rkm=Math.min(400, Math.round(30*Math.pow(2.6, mag-4)));   // M4≈30, M5≈80, M6≈200 km
+    const col = mag>=6?'#7f1d1d' : mag>=5?'#dc2626' : '#f59e0b';
+    let hace='';
+    if(isFinite(t)){ const d=Date.now()-t, mn=Math.round(d/60000);
+      hace = mn<60?('hace '+mn+' min') : mn<1440?('hace '+Math.round(mn/60)+' h') : ('hace '+Math.round(mn/1440)+' d'); }
+    state.markers.addLayer(L.circle([s.lat,s.lng],{radius:rkm*1000,color:col,weight:2,opacity:.5,fillColor:col,fillOpacity:.08,interactive:false}));
+    const m=L.marker([s.lat,s.lng],{icon:sismoIcon(mag,col),zIndexOffset:500});
+    m.bindPopup(`<b>🫨 Sismo M${mag.toFixed(1)}</b><br>${esc(s.lugar||'Colombia')}${hace?'<br>'+hace:''}<br>Profundidad: ${s.profundidad!=null?Math.round(s.profundidad)+' km':'—'}<br>Radio estimado sentido: ~${rkm} km<br><span style="color:#64748b;font-size:12px">Fuente: USGS · automático</span>`);
+    state.markers.addLayer(m);
   });
   // ANCLAS DE CONFIANZA: zonas urbanas con instituciones (hospital, alcaldía, Cruz Roja,
   // bomberos, policía, universidades). Se dibuja un halo suave = radio de confianza. Los
