@@ -1223,8 +1223,15 @@ function baseTiles(){
   // la región de abajo que sí está guardada, en vez de mostrar azul.
   const Cls = (typeof L!=='undefined' && L.TileLayer.Respaldo) ? L.TileLayer.Respaldo : L.TileLayer;
   return new Cls('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
+    // PERF (v65): keepBuffer bajado de 8→3 y updateWhenIdle true en celular. Con un solo
+    // subdominio 'a' (obligatorio para que calce el mapa offline del service worker), el
+    // navegador solo abre ~6 conexiones a ese host; keepBuffer:8 pedía un anillo enorme de
+    // tiles que se encolaban todos en ese único host → mapa lento al mover. keepBuffer:3
+    // mantiene el offline fluido pidiendo muchos menos tiles, y updateWhenIdle en móvil
+    // (el default de Leaflet, que antes estaba forzado en false) no inunda de pedidos mientras
+    // se arrastra: carga al soltar. Subdominio y caché offline SIN tocar.
     subdomains:'a', maxZoom:20, detectRetina:false, crossOrigin:true,
-    updateWhenIdle:false, updateWhenZooming:false, keepBuffer:8,
+    updateWhenIdle:(typeof L!=='undefined' && L.Browser && L.Browser.mobile), updateWhenZooming:false, keepBuffer:3,
     attribution:'© OpenStreetMap · © CARTO'
   });
 }
