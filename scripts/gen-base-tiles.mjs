@@ -21,7 +21,7 @@ function addBox(name, latMin, latMax, lonMin, lonMax, zMin, zMax){
     const x0 = lon2x(lonMin, z), x1 = lon2x(lonMax, z);
     const y0 = lat2y(latMax, z), y1 = lat2y(latMin, z); // y crece hacia el sur
     for(let x = x0; x <= x1; x++) for(let y = y0; y <= y1; y++){
-      const u = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`;
+      const u = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
       if(!tiles.has(u)){ tiles.add(u); n++; }
     }
   }

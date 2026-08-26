@@ -1222,7 +1222,7 @@ function baseTiles(){
   // + capa Respaldo → NUNCA queda en blanco: si falta el detalle de calle o el zoom, se amplía
   // la región de abajo que sí está guardada, en vez de mostrar azul.
   const Cls = (typeof L!=='undefined' && L.TileLayer.Respaldo) ? L.TileLayer.Respaldo : L.TileLayer;
-  return new Cls('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
+  return new Cls('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     // PERF (v65): keepBuffer bajado de 8→3 y updateWhenIdle true en celular. Con un solo
     // subdominio 'a' (obligatorio para que calce el mapa offline del service worker), el
     // navegador solo abre ~6 conexiones a ese host; keepBuffer:8 pedía un anillo enorme de
@@ -1230,9 +1230,9 @@ function baseTiles(){
     // mantiene el offline fluido pidiendo muchos menos tiles, y updateWhenIdle en móvil
     // (el default de Leaflet, que antes estaba forzado en false) no inunda de pedidos mientras
     // se arrastra: carga al soltar. Subdominio y caché offline SIN tocar.
-    subdomains:'a', maxZoom:20, detectRetina:false, crossOrigin:true,
+    subdomains:'a', maxZoom:20, maxNativeZoom:19, detectRetina:false, crossOrigin:true,
     updateWhenIdle:(typeof L!=='undefined' && L.Browser && L.Browser.mobile), updateWhenZooming:false, keepBuffer:3,
-    attribution:'© OpenStreetMap · © CARTO'
+    attribution:'© OpenStreetMap'
   });
 }
 /* DESCARGAR MI ZONA para uso SIN internet (la solución real: nadie puede mostrar mapa que nunca
@@ -1255,7 +1255,7 @@ function _tilesZona(b, zmin, zmax){
     const x0=_lon2tx(b.getWest(),z),  x1=_lon2tx(b.getEast(),z);
     const y0=_lat2ty(b.getNorth(),z), y1=_lat2ty(b.getSouth(),z); // y crece hacia el sur
     for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++)
-      urls.push('https://a.basemaps.cartocdn.com/rastertiles/voyager/'+z+'/'+x+'/'+y+'.png');
+      urls.push('https://tile.openstreetmap.org/'+z+'/'+x+'/'+y+'.png');
   }
   return Array.from(new Set(urls));
 }

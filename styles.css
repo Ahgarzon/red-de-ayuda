@@ -87,8 +87,18 @@ body{
 .map-legend{
   position:absolute;left:8px;top:120px;bottom:auto;z-index:500;background:rgba(255,255,255,.96);
   border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);max-width:62vw;
-  padding:9px 11px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text)
+  font-size:12.5px;color:var(--text)
 }
+/* Colapsable: por defecto se ve solo la pastilla "Colores del mapa" (no tapa el mapa);
+   al tocarla se despliega la leyenda completa. <details> nativo, sin JS. */
+.map-legend>summary{
+  list-style:none;cursor:pointer;padding:8px 12px;font-weight:700;font-size:12.5px;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--text)
+}
+.map-legend>summary::-webkit-details-marker{display:none}
+.map-legend>summary::after{content:'▾';margin-left:auto;padding-left:10px;opacity:.55;font-size:11px}
+.map-legend[open]>summary::after{content:'▴'}
+.legend-body{padding:2px 12px 10px;display:flex;flex-direction:column;gap:5px}
 .map-legend span{white-space:nowrap}
 .map-legend strong{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);margin-bottom:1px}
 .map-legend span{display:flex;align-items:center;gap:8px}
