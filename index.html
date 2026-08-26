@@ -8,7 +8,7 @@
    versión vieja guardada (Service Worker/caché), borra TODO y recarga UNA sola vez.
    Así ningún dispositivo se queda jamás con la app vieja mostrando pantalla vacía. */
 (function(){
-  var RUNNING='68';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
+  var RUNNING='69';                 // ⚠️ SUBIR ESTE NÚMERO EN CADA DEPLOY (debe igualar version.json)
   var KEY='ay_healed_v';
   try{
     fetch('version.json?ts='+Date.now(),{cache:'no-store'})
@@ -381,7 +381,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="gazetteer.js"></script>
-<script src="app.js?v=68"></script>
+<script src="app.js?v=69"></script>
 <!-- RED DE SEGURIDAD del splash: si en 9s la app no arrancó (JS roto, recurso colgado o
      navegador que bloquea todo), mostramos "Reintentar" para que el usuario no quede atrapado
      en una pantalla que gira para siempre. Va en su PROPIO <script>: corre aunque app.js falle. -->

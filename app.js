@@ -1505,7 +1505,8 @@ function renderMap(){
       hace = mn<60?('hace '+mn+' min') : mn<1440?('hace '+Math.round(mn/60)+' h') : ('hace '+Math.round(mn/1440)+' d'); }
     state.markers.addLayer(L.circle([s.lat,s.lng],{radius:rkm*1000,color:col,weight:2,opacity:.5,fillColor:col,fillOpacity:.08,interactive:false}));
     const m=L.marker([s.lat,s.lng],{icon:sismoIcon(mag,col),zIndexOffset:500});
-    m.bindPopup(`<b>🫨 Sismo M${mag.toFixed(1)}</b><br>${esc(s.lugar||'Colombia')}${hace?'<br>'+hace:''}<br>Profundidad: ${s.profundidad!=null?Math.round(s.profundidad)+' km':'—'}<br>Radio estimado sentido: ~${rkm} km<br><span style="color:#64748b;font-size:12px">Fuente: USGS · automático</span>`);
+    const fuente = (s.mag_oficial!=null) ? 'Fuente: SGC (oficial Colombia)' : 'Fuente: USGS · automático';
+    m.bindPopup(`<b>🫨 Sismo M${mag.toFixed(1)}</b><br>${esc(s.lugar||'Colombia')}${hace?'<br>'+hace:''}<br>Profundidad: ${s.profundidad!=null?Math.round(s.profundidad)+' km':'—'}<br>Radio estimado sentido: ~${rkm} km<br><span style="color:#64748b;font-size:12px">${fuente}</span>`);
     state.markers.addLayer(m);
   });
   // ANCLAS DE CONFIANZA: zonas urbanas con instituciones (hospital, alcaldía, Cruz Roja,
