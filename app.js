@@ -1308,12 +1308,25 @@ async function descargarZona(){
     setTimeout(()=>{ if(bar) bar.style.display='none'; }, 4200);
   }
 }
+// Umbral de zoom bajo el cual se OCULTAN las etiquetas permanentes de los puntos. Alejado
+// (país/departamento) se amontonan decenas de etiquetas de texto y CADA arrastre reposiciona
+// todas esas cajas DOM → el mapa se siente pesado en Android. Se muestran al acercar (nivel ciudad),
+// que es cuando se pueden leer. Es solo VISUAL (CSS): los marcadores y su info siguen intactos.
+const LABELS_MINZOOM = 12;
+function toggleLabels(){
+  if(!state.map) return;
+  state.map.getContainer().classList.toggle('hide-labels', state.map.getZoom() < LABELS_MINZOOM);
+}
 function initMap(){
   if(state.map) return;
-  state.map = L.map('map',{zoomControl:true, tap:true}).setView([4.6,-74.1], 6); // Colombia
+  // PERF (v68): preferCanvas → los círculos (circleMarker/circle: la mayoría del mapa) se dibujan
+  // en UN solo canvas en vez de decenas de nodos SVG, que es lo que trababa el arrastre en Android.
+  // markerZoomAnimation:false → no anima cada pin al hacer zoom (con muchos puntos daba tirones).
+  state.map = L.map('map',{zoomControl:true, tap:true, preferCanvas:true, markerZoomAnimation:false}).setView([4.6,-74.1], 6); // Colombia
   baseTiles().addTo(state.map);
   state.markers = L.layerGroup().addTo(state.map);
   state.map.on('dragstart zoomstart', ()=>{ userMoved=true; });
+  state.map.on('zoomend', toggleLabels); toggleLabels();
   // Botones propios (ubicación / ver todos)
   const bl=$('#btn-locate'), bf=$('#btn-fitall'), ba=$('#btn-anclas');
   if(bl) bl.onclick=()=>locateMe(true);
@@ -1508,6 +1521,7 @@ function renderMap(){
   }
   // La primera vez que llegan puntos, encuadra el mapa para que se VEAN (si el usuario no movió aún)
   if(!mapFitDone && !userMoved) fitToPoints();
+  toggleLabels();   // aplica el ocultar/mostrar etiquetas según el zoom actual (tras recrear marcadores)
 }
 
 /* ====== Mini-mapa para ELEGIR ubicación (toca o arrastra el pin) ====== */

@@ -446,6 +446,9 @@ textarea{min-height:74px;resize:vertical}
   padding:2px 7px;font-weight:800;font-size:11.5px;color:var(--text);box-shadow:0 1px 5px rgba(20,22,55,.18);white-space:nowrap}
 .leaflet-tooltip.mk-label:before{display:none}
 .leaflet-tooltip.mk-label-acopio{color:#7c3aed;border-color:#cbb6f6}
+/* PERF (v68): con el mapa alejado se ocultan las etiquetas (se amontonaban ilegibles y trababan
+   el arrastre en Android por reposicionar decenas de cajas DOM). Reaparecen al acercar a ciudad. */
+.leaflet-container.hide-labels .leaflet-tooltip.mk-label{display:none!important}
 
 /* ===== "Cómo llegar" dentro de los globos del mapa ===== */
 .popup-go{display:inline-block;margin-top:7px;color:#1a73e8;font-weight:800;text-decoration:none;font-size:14px}
