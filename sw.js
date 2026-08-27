@@ -1,4 +1,4 @@
-const APP='ayuda-v69';
+const APP='ayuda-v70';
 const TILES='ayuda-tiles-v3';
 const BASE='ayuda-base-v3';   // mapa de Colombia a bajo zoom, precargado (nunca en blanco sin señal). v3: tiles OSM (CARTO exigía API key y estampaba marca de agua)
 importScripts('./base-tiles.js');   // define self.BASE_TILES = [ ...URLs de tiles... ]
