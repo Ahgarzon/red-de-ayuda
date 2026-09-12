@@ -1,8 +1,8 @@
 'use strict';
 /* ================= Red de Ayuda · Terremoto Colombia ================= */
-const API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-api';
-const SUG_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-sugerencia';
-const GEO_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-geo';
+const API = 'https://n8n.angelszs.site/webhook/ayuda-api';
+const SUG_API = 'https://n8n.angelszs.site/webhook/ayuda-sugerencia';
+const GEO_API = 'https://n8n.angelszs.site/webhook/ayuda-geo';
 const LS = {
   puntos:'ay_puntos', entregas:'ay_entregas', fuentes:'ay_fuentes',
   aportes:'ay_aportes', desaparecidos:'ay_desap', avistamientos:'ay_avist',
@@ -505,7 +505,7 @@ function askQuitar(cb){
    de un punto (sin atender → voy en camino → resuelto). Así dos unidades no van al mismo sitio
    y se ve un tablero de lo crítico. La autorización se valida EN LA BASE (RPC ayuda_atender):
    el navegador solo manda el código; si la entidad no está aprobada, la base lo rechaza. */
-const ENT_API = 'https://n8n.angelautomatizacionesn8n.xyz/webhook/ayuda-entidad';
+const ENT_API = 'https://n8n.angelszs.site/webhook/ayuda-entidad';
 const TIPOS_ENT = [['ambulancia','🚑 Ambulancia'],['bomberos','🚒 Bomberos'],['cruz_roja','➕ Cruz Roja'],['defensa_civil','🛟 Defensa Civil'],['policia','👮 Policía'],['ejercito','🎖️ Ejército'],['hospital','🏥 Hospital / Salud'],['alcaldia','🏛️ Alcaldía / Gobierno'],['otro','🤝 Otra entidad']];
 const TIPO_LBL = Object.fromEntries(TIPOS_ENT.map(([k,v])=>[k,v]));
 /* Logo (emoji) y color por tipo de entidad → así en el mapa se ve QUIÉN atiende cada punto:
